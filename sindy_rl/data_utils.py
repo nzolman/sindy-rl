@@ -1,9 +1,12 @@
 import numpy as np
 
-def collect_random_data(env, n_steps, seed=42):
+def collect_random_data(env, n_steps, seed=None):
     actions = []
-    observation = env.reset(seed=seed)
-    env.action_space.seed(seed)
+    if seed is not None: 
+        observation = env.reset(seed=seed)
+        env.action_space.seed(seed)
+    else:
+        env.reset()
     observations = [observation]
     trajs_action = []
     trajs_obs = []
@@ -47,3 +50,4 @@ def split_by_steps(N_train_steps, trajs_action, trajs_obs):
             break
 
     return x_train, u_train, x_test, u_test
+
