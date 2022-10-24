@@ -18,7 +18,7 @@ ray.init()
 LOCAL_DIR = os.path.join(_parent_dir,'ray_results')
 reward_threshold = 475
 N_EXPERIMENTS = 8
-N_STEPS_TRAIN = 25
+N_STEPS_TRAIN = 1000
 
 EVAL_SEED = 0     # seed for evaluating all environments
 TUNE_SEED = 42    # seed for setting Tune
@@ -41,7 +41,7 @@ config['seed'] = TRAIN_SEED
 real_env_config = {'dyn_model': CartPoleGymDynamics()}
 real_env = CartSurrogate(real_env_config)
 
-dyn_experiment_config = {
+dyn_experiment_config = {  'is_true': False,
                            'dyn_class': SINDyDynamics,
                            'dyn_model_config': {
                               'dt': 0.02,

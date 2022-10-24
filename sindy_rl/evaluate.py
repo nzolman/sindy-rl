@@ -5,6 +5,10 @@ from ray import tune, air
 from pprint import pprint
 from tqdm import tqdm
 
+from sindy_rl.dynamics import SINDyDynamics, CartPoleGymDynamics
+from sindy_rl.environment import CartSurrogate
+from sindy_rl.data_utils import collect_random_data, split_by_steps
+
 def evaluate_model(config, n_resets, checkpoint_path):
     env_class = config['env']
     
@@ -32,3 +36,27 @@ def evaluate_model(config, n_resets, checkpoint_path):
             }
     return result
 
+
+def load_dynamics_model(path):
+    with open(path, 'rb') as f: 
+        d = json.load(f)
+    
+    config = d.get('dyn_experiment_config', None)
+    seed = config['collect_seed']
+    dyn_config = config['dyn_model_config']
+
+    real_env_config = {'dyn_model': CartPoleGymDynamics()}
+    real_env = CartSurrogate(real_env_config)
+
+    N_steps_collect = config['N_steps_collect']
+    N_steps_train = config['N_steps_train']
+    trajs_action, trajs_obs = collect_random_data(real_env, N_steps_collect, seed=seed)
+    x_train, u_train, x_test, u_test = split_by_steps(N_steps_train, trajs_action, trajs_obs)
+
+    # Train Dynamics Model
+    # pprint(dyn_config)
+    dyn_model = SINDyDynamics(dyn_config = dyn_config)
+    
+    dyn_model.fit(observations = x_train, actions=u_train)
+
+    return dyn_model, x_train, u_train, x_test, u_test
