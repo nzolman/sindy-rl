@@ -6,7 +6,7 @@ import optax
 import time
 from functools import partial
 
-from sindy_rl.diff_control.trainer import BaseDiffControlTrainer
+# from sindy_rl.diff_control.trainer import BaseDiffControlTrainer
 
 # Code adapted from Julia [1,2] to JAX
 # 
@@ -20,6 +20,8 @@ m = 1 # pole mass kg
 M = 2 # cart mass kg
 L = 1 # pole length m
 g = 9.8 # acceleration constant m/s^2
+
+modpi = lambda theta: (theta + jnp.pi)%(2*jnp.pi) - jnp.pi
 
 @jit
 def mlp(params, inputs):
@@ -102,7 +104,12 @@ def loss_neural_ode(params, u0, t):
     pred = predict_neural_ode(params, u0, t)
     x, dx, theta, dtheta, impulse = pred.T
     forces = jnp.diff(impulse)/jnp.diff(t)
-    loss = jnp.mean(theta**2) + 4*theta[-1]**2 + dx[-1]**2 + dtheta[-1]**2 +0.1* jnp.mean(x**2) + 0.001*jnp.max(forces**2)#+ dtheta[-1]**2
+    theta = modpi(theta)
+    # loss = jnp.mean(theta**2) + 4*theta[-1]**2 + dx[-1]**2 
+    #       + dtheta[-1]**2 +0.1* jnp.mean(x**2) + 0.001*jnp.max(forces**2)#+ dtheta[-1]**2
+    loss = 100*jnp.mean(theta**2) + jnp.mean(dtheta**2) + jnp.mean(dx**2) + jnp.mean(x**2) + 0.0001*jnp.mean(forces**2) + 0.001*jnp.max(forces**2)
+    # only have integral costs on everything except x
+    # big penalty coeff on derivatives.
     return loss
 
 
