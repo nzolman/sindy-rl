@@ -45,7 +45,7 @@ def plot_phase_cartpole(dyn_model, fig_label):
     axes[1][idx].set_xlabel(r'$\theta(t)$', fontsize=12)
 
     fig.suptitle(fig_label, fontsize=15)
-
+    return fig, axes
 
 # ------------------------------------------------------------
 

@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-# import numpy.random as npr
 from jax import numpy as jnp
 from jax import jit, grad, value_and_grad
 from jax.random import PRNGKey
