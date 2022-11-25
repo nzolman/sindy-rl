@@ -30,19 +30,21 @@ class CartSurrogate(CartPoleEnv):
     def get_reward(self, done):
         if not done:
             reward = 1.0
-        elif self.steps_beyond_done is None:
+        # else:
+        #     reward = 0.0
+        elif self.steps_beyond_terminated is None:
             # Pole just fell!
-            self.steps_beyond_done = 0
+            self.steps_beyond_terminated = 0
             reward = 1.0
         else:
-            if self.steps_beyond_done == 0:
+            if self.steps_beyond_terminated == 0:
                 logger.warn(
                     "You are calling 'step()' even though this "
                     "environment has already returned done = True. You "
                     "should always call 'reset()' once you receive 'done = "
                     "True' -- any further steps are undefined behavior."
                 )
-            self.steps_beyond_done += 1
+            self.steps_beyond_terminated += 1
             reward = 0.0
         
         return reward
@@ -87,15 +89,16 @@ class CartSurrogate(CartPoleEnv):
         '''
         Wraps reset
         '''
-        res = super().reset(**reset_kwargs)
+        obs, _ = super().reset(**reset_kwargs)
         self.n_episode_steps = 0
         self.episode_reward = 0
-        return res
+        return obs
 
 if __name__ == '__main__': 
 
     dyn_model = CartPoleGymDynamics()
-    env = CartSurrogate(dyn_model=dyn_model)
+    env_config = {'dyn_model': dyn_model}
+    env = CartSurrogate(env_config)
     env2 = CartPoleEnv()
 
     observation= env.reset(seed=42)
@@ -105,8 +108,7 @@ if __name__ == '__main__':
     for i in range(n_steps):
         action = env.action_space.sample()
         observation, reward, terminated, info = env.step(action)
-        obs2, rew2, term2, info2 = env2.step(action)
-        # gwarp = env2.step(action)
+        obs2, rew2, term2,_, info2 = env2.step(action)
         print(f'{i} obs: {observation}')
         print(f'{i} obs: {obs2} (gym)')
         print(f'{i} rew: {reward}')

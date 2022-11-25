@@ -3,7 +3,7 @@ import pysindy as ps
 import warnings
 
 from sindy_rl.data_utils import collect_random_data, split_by_steps
-from sindy_rl.environment import CartSurrogate
+from sindy_rl.envs.cartpole import CartSurrogate
 from sindy_rl.dynamics import CartPoleGymDynamics, SINDyDynamics
 
 def test_sindy_score():

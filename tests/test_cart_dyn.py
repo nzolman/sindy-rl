@@ -1,6 +1,6 @@
 import numpy as np
 
-from sindy_rl.environment import CartSurrogate, CartPoleEnv
+from sindy_rl.envs.cartpole import CartSurrogate, CartPoleEnv
 from sindy_rl.dynamics import BaseDynModel, SINDyDynamics, CartPoleGymDynamics
 
 
@@ -18,14 +18,17 @@ def test_dynamics_equality():
     for i in range(n_steps):
         action = env.action_space.sample()
         observation, reward, terminated, info = env.step(action)
-        obs2, rew2, term2, info2 = env2.step(action)
+        obs2, rew2, terminated2, truncated,  info2 = env2.step(action)
 
         assert np.all(observation == obs2)
         assert reward == rew2
-        assert terminated == term2
+        assert terminated == terminated2 or truncated
         assert info == info2
        
         if terminated:
             observation = env.reset()
-        if term2:
+        if terminated2 or truncated:
             obs2 = env2.reset()
+
+if __name__ == '__main__': 
+    test_dynamics_equality()
