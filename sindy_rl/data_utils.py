@@ -1,21 +1,34 @@
 import numpy as np
 
-def collect_random_data(env, n_steps, seed=None):
+def collect_random_data(env, n_steps, seed=None, use_null = None, max_traj_len = None):
+    '''
+    `use_null`: None if randomly sampling, else np.array for the null vector
+    
+    `max_traj_len`: None if using environment max_traj_len, otherwise overides to
+        reset every max_traj_len steps.
+    '''
     actions = []
     if seed is not None: 
         observation = env.reset(seed=seed)
         env.action_space.seed(seed)
     else:
-        env.reset()
+        observation = env.reset()
     observations = [observation]
     trajs_action = []
     trajs_obs = []
 
     for i in range(n_steps):
-        action = env.action_space.sample()
+        if type(use_null)!=type(None): 
+            action = use_null
+        else:
+            action = env.action_space.sample()
         actions.append(env.action_map(action))
         observation, reward, done, info = env.step(action)
         observations.append(observation)
+        
+        if max_traj_len and i % max_traj_len == 0: 
+            done = True
+
         if done:
             observation = env.reset()
             observations.pop()
