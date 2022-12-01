@@ -6,7 +6,7 @@ from pprint import pprint
 from tqdm import tqdm
 
 from sindy_rl.dynamics import SINDyDynamics, CartPoleGymDynamics
-from sindy_rl.environment import CartSurrogate
+from sindy_rl.envs.cartpole import CartSurrogate
 from sindy_rl.data_utils import collect_random_data, split_by_steps
 
 def evaluate_model(config, n_resets, checkpoint_path):
