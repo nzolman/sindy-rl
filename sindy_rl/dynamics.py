@@ -20,6 +20,7 @@ class BaseDynModel:
         '''
         return state
 
+
 class CartPoleGymDynamics:
     def __init__(self):
         self.gravity = 9.8
@@ -71,28 +72,81 @@ class CartPoleGymDynamics:
 
 class SINDyDynamics:
     '''
-    Generic SINDy Dynamics model
+    Generic discrete SINDy Dynamics model
     '''
     def __init__(self, dyn_config=None):
         self.config = dyn_config or {}
         self.dt = self.config.get('dt', 1)
-        self.optimizer_name = self.config.get('optimizer', 'STLSQ')
-        self.optimizer_kwargs = self.config.get('optimizer_kwargs', {})
-        self.optimizer = getattr(ps, self.optimizer_name)(**self.optimizer_kwargs)
 
-        self.model = ps.SINDy(discrete_time=True,optimizer=self.optimizer)
+        optimizer = self.config.get('optimizer', 'STLSQ')
+        if type(optimizer) == str:
+            self.optimizer_name = optimizer
+            self.optimizer_kwargs = self.config.get('optimizer_kwargs', {})
+            self.optimizer = getattr(ps, self.optimizer_name)(**self.optimizer_kwargs)
+        else:
+            self.optimizer = optimizer
         
-    
-    def fit(self, observations, actions):
-        self.model.fit(observations, u=actions, multiple_trajectories=True, t=self.dt)
+        self.feature_library = self.config.get('feature_library', ps.PolynomialLibrary())
+        
+        self.model = ps.SINDy(discrete_time=True, 
+                              optimizer=self.optimizer, 
+                              feature_library=self.feature_library)
+
+    def fit(self, observations, actions, **kwargs):
+        self.model.fit(observations, u=actions, multiple_trajectories=True, t=self.dt, **kwargs)
         return self.model
 
     def predict(self, state, action):
         return self.model.simulate(x0=state, t=2, u=np.array([action]))[-1]
 
+
+# TO-DO:
+# 1. Configure bound_thresh
+# 2. Configure stable_idx
+# 3. Utilize stable_idx
+class EnsembleSINDyDynamics(SINDyDynamics):
+    '''
+    Ensemble discrete SINDy Dynamics model
+    '''
+    def __init__(self, dyn_config=None):
+        super().__init__(dyn_config=dyn_config)
+        self.n_models = self.model.optimizer.n_models
+        self.model_flags = np.zeros(self.n_models)
+        self.bound_thresh = 100
+        self.smart = dyn_config.get('use_smart', False)
+        self.mean_coef =  np.mean(self.model.optimizer.coef_list, axis=0)
+        
+        self.stable_idx = np.arange(self.n_models)
+        
+    def predict(self, state, action):
+        if self.smart:
+            states = np.zeros((self.n_models, len(state)))
+            for i in range(self.n_models):
+                coef = self.model.optimizer.coef_list[i]
+                self.model.optimizer.coef_ = coef
+                states[i] = self.model.simulate(x0=state, t=2, u=np.array([action]))[-1]
+                
+            self.model_flags = np.any(np.abs(states) > self.bound_thresh, axis=1)
+            
+            trusted_states = states[~self.model_flags]
+            assert len(trusted_states) > 0, "Ruh-roh"
+            
+            return np.median(trusted_states, axis=0)
+        else:
+            coef = np.mean(self.model.optimizer.coef_list, axis=0)
+            self.model.optimizer.coef_ = coef
+            return self.model.simulate(x0=state, t=2, u=np.array([action]))[-1]
+    
+
+# ens_dyn_model = EnsembleSINDyDynamics(dyn_config=quad_affine_config)
+# ens_dyn_model.optimizer = dyn_model.optimizer
+# ens_dyn_model.model = dyn_model.model
+
+
+
 if __name__ == '__main__':
     from data_utils import collect_random_data
-    from environment import CartSurrogate
+    from sindy_rl.envs.cartpole import CartSurrogate
 
     true_dyn_model = CartPoleGymDynamics()
     env_config = {'dyn_model': true_dyn_model}
