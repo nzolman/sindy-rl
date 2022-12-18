@@ -17,7 +17,7 @@ def collect_random_data(env, n_steps, seed=None, use_null = None, max_traj_len =
     trajs_action = []
     trajs_obs = []
 
-    for i in range(n_steps):
+    for i in range(1, n_steps+1):
         if type(use_null)!=type(None): 
             action = use_null
         else:
