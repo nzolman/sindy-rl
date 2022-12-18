@@ -32,14 +32,21 @@ class SwimmerSurrogate(SwimmerEnv):
         
         # need these to standardize the environment.
         # quantifies when success is met.
+        self.mod_angles = env_config.get('mod_angles', False)
         self.use_trig_obs = env_config.get('use_trig_obs', False)
         self.max_episode_steps = env_config.get('max_episode_steps', 1000)
         self.reward_threshold = env_config.get('reward_threshold', 360.0)
 
         super().__init__(**env_kwargs)
+        
+        # angle indices
+        self.angle_idx =  np.array([0,1,2]) + 2*(1-self._exclude_current_positions_from_observation)
 
         # Whether or not to use the surrogate model
         self.dyn_model = env_config.get('dyn_model', None)
+        
+    def mod2pi(self, angles):
+        return ((angles + np.pi) % (2*np.pi)) - np.pi
         
     def get_done(self):
         done = bool(
@@ -115,7 +122,7 @@ class SwimmerSurrogate(SwimmerEnv):
             # x_vel = (self.state[0] - self.prev_state[0])/self.dt
             
             # self.prev_state = self.state.copy()
-            if not self._exclude_current_positions_from_observation:
+            if self._exclude_current_positions_from_observation:
                 x_vel = self.state[3]
             else: 
                 x_vel = self.state[5]
@@ -125,8 +132,11 @@ class SwimmerSurrogate(SwimmerEnv):
             
         else:
             self.state, reward, info = self.real_step(action)
-            if self.use_trig_obs:
-                self.state = self.trig_obs(self.state)
+            # if self.use_trig_obs:
+            #     self.state = self.trig_obs(self.state)
+        
+        if self.mod_angles:
+            self.state[self.angle_idx] = self.mod2pi(self.state[self.angle_idx])
         
         self.episode_reward += reward
         self.n_episode_steps += 1
