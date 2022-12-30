@@ -118,6 +118,8 @@ class EnsembleSINDyDynamics(SINDyDynamics):
         
         self.stable_idx = np.arange(self.n_models)
         
+        self.use_median = dyn_config.get('use_median', False)
+        
     def predict(self, state, action):
         if self.smart:
             states = np.zeros((self.n_models, len(state)))
@@ -133,11 +135,14 @@ class EnsembleSINDyDynamics(SINDyDynamics):
             
             return np.median(trusted_states, axis=0)
         else:
-            coef = np.mean(self.model.optimizer.coef_list, axis=0)
+            if self.use_median:
+                coef = np.median(self.model.optimizer.coef_list, axis=0)
+            else:
+                coef = np.mean(self.model.optimizer.coef_list, axis=0)
+
             self.model.optimizer.coef_ = coef
             return self.model.simulate(x0=state, t=2, u=np.array([action]))[-1]
     
-
 # ens_dyn_model = EnsembleSINDyDynamics(dyn_config=quad_affine_config)
 # ens_dyn_model.optimizer = dyn_model.optimizer
 # ens_dyn_model.model = dyn_model.model
