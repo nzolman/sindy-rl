@@ -17,6 +17,17 @@ Default Observation
     | 7   | angular velocity of second rotor     | -Inf | Inf | motor2_rot                       | hinge | angular velocity (rad/s) |
 '''
 
+_DEFAULT_ENV_BOUNDS = np.array([
+        [-np.pi, np.pi],
+        [-100/180 * np.pi, 100/180*np.pi],
+        [-100/180 * np.pi, 100/180*np.pi],
+        [-10.0, 10.0],
+        [-10.0, 10.0],
+        [-10.0, 10.0],
+        [-10.0, 10.0],
+        [-10.0, 10.0],
+])
+
 class SwimmerSurrogate(SwimmerEnv):
     '''
     Wrapper for Swimmer-v4 Environment [1]
@@ -36,6 +47,9 @@ class SwimmerSurrogate(SwimmerEnv):
         self.use_trig_obs = env_config.get('use_trig_obs', False)
         self.max_episode_steps = env_config.get('max_episode_steps', 1000)
         self.reward_threshold = env_config.get('reward_threshold', 360.0)
+        
+        self.reset_on_bounds = env_config.get('reset_on_bounds', True)
+        self.bounds = _DEFAULT_ENV_BOUNDS
 
         super().__init__(**env_kwargs)
         
@@ -57,6 +71,13 @@ class SwimmerSurrogate(SwimmerEnv):
             self.n_episode_steps >= self.max_episode_steps
             # or self.episode_reward >= self.reward_threshold
         )
+        
+        if self.reset_on_bounds:
+            lower_bounds = np.any(self.state <= _DEFAULT_ENV_BOUNDS.T[0])
+            upper_bounds = np.any(self.state >= _DEFAULT_ENV_BOUNDS.T[1])
+            out_of_bounds = lower_bounds or upper_bounds
+            done = done or out_of_bounds
+        
         return done
         
     def get_reward(self, action, x_velocity):
@@ -96,7 +117,7 @@ class SwimmerSurrogate(SwimmerEnv):
             self.render()
         return observation, reward, info
     
-
+ 
     def trig_obs(self, state):
         new_state = np.zeros(len(state) + 3)
         angle_idx = np.array([0,1,2])
@@ -122,6 +143,9 @@ class SwimmerSurrogate(SwimmerEnv):
             # x_vel = (self.state[0] - self.prev_state[0])/self.dt
             
             # self.prev_state = self.state.copy()
+            
+            # TO-DO: Make sure we pull out the right 
+            # velocity term if we have the angle idx set up.
             if self._exclude_current_positions_from_observation:
                 x_vel = self.state[3]
             else: 

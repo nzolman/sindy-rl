@@ -1,15 +1,15 @@
 import ray
 import ray.rllib.algorithms.ppo as ppo
-from ray.rllib.algorithms.ppo import PPOConfig
-import os
-from ray.tune.logger import pretty_print
-from ray.tune import Trainable
 from ray import tune, air
+from ray.rllib.algorithms.ppo import PPOConfig
+from ray.tune.logger import pretty_print
+import os
+# from ray.tune import Trainable
 from pprint import pprint
 import random
 import numpy as np
-import torch
 import yaml
+import pickle
 
 import pysindy as ps
 
@@ -20,22 +20,7 @@ from sindy_rl.envs.swimmer import SwimmerSurrogate
 from sindy_rl import _parent_dir
 
 
-"""Example of a custom experiment wrapped around an RLlib Algorithm."""
-import argparse
-
-import ray
-from ray import tune
-import ray.rllib.algorithms.ppo as ppo
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--train-iterations", type=int, default=10)
-
-
-_ENV_CLASS = SwimmerSurrogate
-_ENV_CONFIG = {'dyn_model': None,
-                'max_episode_steps': 1000,
-                'mod_angles': True
-                }
+_TEMPLATES_PATH = os.path.join(_parent_dir, 'templates')
 
 def collect_real_traj(env, 
                       collect_seed = 0, 
@@ -127,6 +112,11 @@ def on_policy_real_traj(env, policy, n_steps=1000, seed=0, explore=False):
     
             
 def setup_dyn_model(affine_config=None, base_config = None, ensemble_config=None):
+    '''
+    An example of setting up a dynamics model using SINDy with an
+        affine-control dynamics library of the from 
+            x_dot = p_1(x) + p_2(x)u
+    '''
     affine_kwargs = affine_config or dict(poly_deg= 2, 
                                           n_state = 8, 
                                           n_control = 2)
@@ -154,33 +144,35 @@ def setup_dyn_model(affine_config=None, base_config = None, ensemble_config=None
     return dyn_model
         
 def experiment(config):
+    CHECKPOINT_FREQ = train_config['ray_config']['checkpoint_freq']
+    baseline = config['baseline']
+    
     drl_config = train_config['drl_config']
     n_dyn_updates = 0
     
     # TO-DO: Find a better place for this
-    train_iterations = drl_config.pop("train-iterations")
+    train_iterations = config.pop("train-iterations")
     
     algo = ppo.PPO(config=drl_config)
     
-    # a hack to get an environment to fit on
-    env_config = drl_config['env_config']
-    env = algo.workers.local_worker().env_creator(env_config)
-    env.dyn_model = None  # ensure that we're using the true dynamics
-    
-    # collect trajectories
-    # collect_config = dict(collect_seed = 0, 
-    #                         n_random_steps = 10000, 
-    #                         n_null_steps = 10000,
-    #                         max_traj_len = 100)
-    
-    x_train, u_train = collect_real_traj(env, **config['init_collection'])
+    if not baseline:
+        # a hack to get an environment to fit on
+        env_config = drl_config['env_config']
+        env = algo.workers.local_worker().env_creator(env_config)
+        env.dyn_model = None  # ensure that we're using the true dynamics
 
-    # setup dyn model
-    dyn_config = config['dyn_model_config']
-    dyn_model = setup_dyn_model(**dyn_config)
-    dyn_model.fit(x_train, u_train)
-    
-    algo.workers.foreach_worker(update_env_dyn_model(dyn_model))
+        # collect trajectories
+        x_train, u_train = collect_real_traj(env, **config['init_collection'])
+
+        # setup dyn model
+        dyn_config = config['dyn_model_config']
+        dyn_model = setup_dyn_model(**dyn_config)
+        dyn_model.fit(x_train, u_train)
+
+
+        algo.workers.foreach_worker(update_env_dyn_model(dyn_model))
+    else:
+        dyn_model = None
     
     checkpoint = None
     train_results = {}
@@ -188,35 +180,26 @@ def experiment(config):
     # Train
     for i in range(train_iterations):
         train_results = algo.train()
-        if i % 2 == 0 or i == train_iterations - 1:
+        if i % CHECKPOINT_FREQ == 0 or i == train_iterations - 1:
             checkpoint = algo.save(tune.get_trial_dir())
+            dyn_path = os.path.join(tune.get_trial_dir(), f'checkpoint_{i+1:06}', 'dyn_model.pkl')
+            with open(dyn_path, 'wb') as f:
+                pickle.dump(dyn_model, f)
+            
         tune.report(**train_results)
         
-    # algo.evaluation_workers.foreach_worker(test_print_attr('eval'))
     algo.stop()
 
-    # # Manual Eval
-    # config["num_workers"] = 0
-    # eval_algo = ppo.PPO(config=config)
-    # eval_algo.restore(checkpoint)
-    # env = eval_algo.workers.local_worker().env
+# TO-DO set seeds for collect and initialization
 
-    # obs= env.reset()
-    # done = False
-    # eval_results = {"eval_reward": 0, "eval_eps_length": 0}
-    # while not done:
-    #     action = eval_algo.compute_single_action(obs)
-    #     next_obs, reward, done, info = env.step(action)
-    #     eval_results["eval_reward"] += reward
-    #     eval_results["eval_eps_length"] += 1
-    # results = {**train_results, **eval_results}
-    # tune.report(results)
-
-_TEMPLATES_PATH = os.path.join(_parent_dir, 'templates')
 if __name__ == "__main__":
     from sindy_rl import envs as ENVS
+    from pprint import pprint
     
-    from pprint import pprint 
+    LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results', 'tmp')
+    # LOCAL_DIR = os.path.join(_parent_dir, 'ray_results', 'swimmer', '2023-01-07_api_ensemble_ppo_baseline_reset')
+    _EVAL_SEED = 0
+    
     template_fpath = os.path.join(_TEMPLATES_PATH, 'train_swimmer.yml')
     with open(template_fpath, 'r') as f: 
         train_config = yaml.safe_load(f)
@@ -225,37 +208,17 @@ if __name__ == "__main__":
     ray_config = train_config['ray_config']
     drl_config['environment']['env'] = getattr(ENVS, drl_config['environment']['env'] )
 
-    # real_env_config = {
-    #                     'dyn_model': None, 
-    #                     'mod_angles': True
-    #                 }
-    # _EVAL_SEED = 0
+    ray.init()
 
-    LOCAL_DIR = os.path.join(_parent_dir,'ray_results', 'tmp')
-    # args = parser.parse_args()
-
-    ray.init(num_cpus=3)
-    # eval_config = {"env_config": _ENV_CONFIG.copy(),
-    #                 "explore": False,
-    #                 'seed': _EVAL_SEED}
+    drl_config['evaluation']['evaluation_config']['seed'] = _EVAL_SEED
     config = (ppo.PPOConfig()
                 .environment(**drl_config['environment'])
                 .framework(**drl_config['framework'])
                 .evaluation(**drl_config['evaluation'])
     )
-    # config = (ppo.PPOConfig()
-    #             .environment(env=_ENV_CLASS, env_config=_ENV_CONFIG)
-    #             .framework(framework='torch')
-    #             .evaluation(evaluation_config=eval_config, 
-    #                         evaluation_interval=1)
-    # )
-    
-    # algo = config.build()
-    
-    
     
     config = config.to_dict()
-    config["train-iterations"] = 2
+    train_config["train-iterations"] = 300
     
     run_config=air.RunConfig(
         local_dir=LOCAL_DIR,
@@ -264,12 +227,12 @@ if __name__ == "__main__":
     )
     train_config['drl_config'] = config
     # pprint(train_config)
-    
+    tune_config=tune.TuneConfig(**train_config['ray_config']['tune_config'])
     tune.Tuner(
-        tune.with_resources(experiment, ppo.PPO.default_resource_request(config)),
+        tune.with_resources(experiment, 
+                            ppo.PPO.default_resource_request(config)
+                            ),
         param_space=train_config,
         run_config=run_config,
+        tune_config=tune_config
     ).fit()
-    
-    # # env = SwimmerSurrogate(env_config=_ENV_CONFIG)
-    # # x_train, u_train = collect_real_traj(env, 0)
