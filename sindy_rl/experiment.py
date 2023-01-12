@@ -1,11 +1,6 @@
 import ray
-import ray.rllib.algorithms.ppo as ppo
 from ray import tune, air
-from ray.rllib.algorithms.ppo import PPOConfig
-from ray.tune.logger import pretty_print
 import os
-# from ray.tune import Trainable
-from pprint import pprint
 import random
 import numpy as np
 import yaml
@@ -14,9 +9,8 @@ import pickle
 import pysindy as ps
 
 from sindy_rl.sindy_utils import get_affine_lib
-from sindy_rl.dynamics import SINDyDynamics, EnsembleSINDyDynamics
-from sindy_rl.data_utils import collect_random_data, split_by_steps
-from sindy_rl.envs.swimmer import SwimmerSurrogate
+from sindy_rl.dynamics import EnsembleSINDyDynamics
+from sindy_rl.data_utils import collect_random_data
 from sindy_rl import _parent_dir
 
 
@@ -144,16 +138,17 @@ def setup_dyn_model(affine_config=None, base_config = None, ensemble_config=None
     return dyn_model
         
 def experiment(config):
-    CHECKPOINT_FREQ = train_config['ray_config']['checkpoint_freq']
+    CHECKPOINT_FREQ = config['ray_config']['checkpoint_freq']
     baseline = config['baseline']
     
-    drl_config = train_config['drl_config']
+    drl_config = config['drl_config']
+    drl_class = config['drl_class']
     n_dyn_updates = 0
     
     # TO-DO: Find a better place for this
     train_iterations = config.pop("train-iterations")
     
-    algo = ppo.PPO(config=drl_config)
+    algo = drl_class(config=drl_config)
     
     if not baseline:
         # a hack to get an environment to fit on
@@ -193,46 +188,53 @@ def experiment(config):
 # TO-DO set seeds for collect and initialization
 
 if __name__ == "__main__":
+    from ray.rllib.algorithms.registry import get_algorithm_class
     from sindy_rl import envs as ENVS
-    from pprint import pprint
+
     
-    LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results', 'tmp')
-    # LOCAL_DIR = os.path.join(_parent_dir, 'ray_results', 'swimmer', '2023-01-07_api_ensemble_ppo_baseline_reset')
+    # LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results', 'tmp')
+    LOCAL_DIR = os.path.join(_parent_dir, 'ray_results', 'swimmer', '2023-01-10_api_ddpg_ensemble_quad_quad_reset')
     _EVAL_SEED = 0
     
+    # experiment configuration
     template_fpath = os.path.join(_TEMPLATES_PATH, 'train_swimmer.yml')
     with open(template_fpath, 'r') as f: 
-        train_config = yaml.safe_load(f)
+        exp_config = yaml.safe_load(f)
     
-    drl_config = train_config['drl_config']
-    ray_config = train_config['ray_config']
-    drl_config['environment']['env'] = getattr(ENVS, drl_config['environment']['env'] )
+    drl_config = exp_config['drl_config']
+    exp_name = exp_config['drl_class'] + '_' + drl_config['env']
+    
+    exp_config['ray_config']['run_config']['name'] = exp_name
+    
+    drl_class, drl_default_config = get_algorithm_class(exp_config['drl_class'], 
+                                                        return_config=True)
+    
+    
+    drl_config['env'] = getattr(ENVS, drl_config['env'] )
+    # drl_config['evaluation_config']['seed'] = _EVAL_SEED
+    drl_default_config.update(drl_config)
 
+    exp_config['drl_class'] = drl_class
+    exp_config['drl_config'] = drl_default_config
+    
+
+    # setup ray
     ray.init()
-
-    drl_config['evaluation']['evaluation_config']['seed'] = _EVAL_SEED
-    config = (ppo.PPOConfig()
-                .environment(**drl_config['environment'])
-                .framework(**drl_config['framework'])
-                .evaluation(**drl_config['evaluation'])
-    )
-    
-    config = config.to_dict()
-    train_config["train-iterations"] = 300
-    
+    ray_config = exp_config['ray_config']
     run_config=air.RunConfig(
         local_dir=LOCAL_DIR,
         **ray_config['run_config']
         # checkpoint_config=air.CheckpointConfig(checkpoint_frequency=1),
     )
-    train_config['drl_config'] = config
-    # pprint(train_config)
-    tune_config=tune.TuneConfig(**train_config['ray_config']['tune_config'])
+    
+
+    tune_config=tune.TuneConfig(**exp_config['ray_config']['tune_config'])
+    
     tune.Tuner(
         tune.with_resources(experiment, 
-                            ppo.PPO.default_resource_request(config)
+                            drl_class.default_resource_request(drl_default_config)
                             ),
-        param_space=train_config,
+        param_space=exp_config, # this is what is passed to the experiment
         run_config=run_config,
         tune_config=tune_config
     ).fit()

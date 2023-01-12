@@ -1,32 +1,56 @@
 # DRL Algo config
+# drl_config: 
+#     environment:
+#         env: SwimmerSurrogate
+#         env_config:
+#             dyn_model: null # None
+#             max_episode_steps: 1000
+#             mod_angles: True
+#             reset_on_bounds: True
+#     framework: 
+#         framework: torch
+#     evaluation:
+#         evaluation_config:
+#             env_config:
+#                 dyn_model: null # None
+#                 max_episode_steps: 1000
+#                 mod_angles: True
+#                 reset_on_bounds: True
+#             explore: False
+#         evaluation_interval: 1
+
+drl_class: 'DDPG'
+baseline: False
+train-iterations: 3000
+
 drl_config: 
-    environment:
-        env: SwimmerSurrogate
+    env: SwimmerSurrogate
+    env_config:
+        dyn_model: null # None
+        max_episode_steps: 1000
+        mod_angles: True
+        reset_on_bounds: True
+ 
+    framework: torch
+    evaluation_config:
         env_config:
             dyn_model: null # None
             max_episode_steps: 1000
-            mod_angles: True
-            reset_on_bounds: True
-    framework: 
-        framework: torch
-    evaluation:
-        evaluation_config:
-            env_config:
-                dyn_model: null # None
-                max_episode_steps: 1000
-                mod_angles: True
-                reset_on_bounds: True
-            explore: False
-        evaluation_interval: 1
+            mod_angles: False
+            reset_on_bounds: False
+        explore: False
+    evaluation_interval: 5
+    evaluation_duration: 10
 
 
 # Ray Configs
 ray_config:
     run_config:
-        stop: 
-            "training_iteration": 300
+        stop:
+            # timesteps_total
+            num_env_steps_sampled: 1.2e+6 
     tune_config:
-        num_samples: 20
+        num_samples: 20 # number of sample trials to run
     checkpoint_freq: 10
 
 
@@ -51,5 +75,3 @@ dyn_model_config:
         bagging: True 
         library_ensemble: True
         n_models: 100
-
-baseline: True
