@@ -93,16 +93,17 @@ def on_policy_real_traj(env, policy, n_steps=1000, seed=0, explore=False):
         obs = obs_list[-1]
         action = policy.compute_single_action(obs, explore=explore)
         obs, rew, done, info = env.step(action)
-        
+        obs_list.append(obs)
+        act_list.append(action)
         if done or (i == n_steps -1):
             obs_list.pop(-1)
             
-            obs_trajs.append(obs_list)
-            act_trajs.append(act_list)
+            obs_trajs.append(np.array(obs_list))
+            act_trajs.append(np.array(act_list))
             
             obs_list = [env.reset()]
             act_list = []
-    return act_trajs, obs_trajs
+    return obs_trajs, act_trajs
     
             
 def setup_dyn_model(affine_config=None, base_config = None, ensemble_config=None):
@@ -136,8 +137,14 @@ def setup_dyn_model(affine_config=None, base_config = None, ensemble_config=None
         
     dyn_model = EnsembleSINDyDynamics(dyn_config)
     return dyn_model
+
+def num_samples(x_train):
+    return np.sum([len(x) for x in x_train])
         
 def experiment(config):
+    u_train_buffer = []
+    x_train_buffer = []
+    SINDY_FIT_FREQ = config['sindy_fit']['fit_freq']
     CHECKPOINT_FREQ = config['ray_config']['checkpoint_freq']
     baseline = config['baseline']
     
@@ -158,12 +165,13 @@ def experiment(config):
 
         # collect trajectories
         x_train, u_train = collect_real_traj(env, **config['init_collection'])
-
         # setup dyn model
         dyn_config = config['dyn_model_config']
         dyn_model = setup_dyn_model(**dyn_config)
         dyn_model.fit(x_train, u_train)
 
+        u_train_buffer += u_train
+        x_train_buffer += x_train
 
         algo.workers.foreach_worker(update_env_dyn_model(dyn_model))
     else:
@@ -171,17 +179,36 @@ def experiment(config):
     
     checkpoint = None
     train_results = {}
-
+    
     # Train
     for i in range(train_iterations):
         train_results = algo.train()
+        
         if i % CHECKPOINT_FREQ == 0 or i == train_iterations - 1:
             checkpoint = algo.save(tune.get_trial_dir())
             dyn_path = os.path.join(tune.get_trial_dir(), f'checkpoint_{i+1:06}', 'dyn_model.pkl')
             with open(dyn_path, 'wb') as f:
                 pickle.dump(dyn_model, f)
             
+        if i % SINDY_FIT_FREQ == 0 and not baseline:
+            n_dyn_updates += 1
+            x_train, u_train = on_policy_real_traj(env, algo, 
+                                                   n_steps=1000, seed=0, 
+                                                   explore=False)
+            x_train_buffer += x_train
+            u_train_buffer += u_train
+
+            dyn_model.fit(x_train_buffer, u_train_buffer)
+            algo.workers.foreach_worker(update_env_dyn_model(dyn_model))
+            
+            sindy_results = {'n_dyn_updates': n_dyn_updates,
+                             'n_samples': num_samples(x_train_buffer),
+                             'n_traj': len(x_train_buffer)
+                             }
+            train_results['sindy'] = sindy_results
         tune.report(**train_results)
+        
+        
         
     algo.stop()
 
@@ -193,7 +220,7 @@ if __name__ == "__main__":
 
     
     # LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results', 'tmp')
-    LOCAL_DIR = os.path.join(_parent_dir, 'ray_results', 'swimmer', '2023-01-10_api_ddpg_ensemble_quad_quad_reset')
+    LOCAL_DIR = os.path.join(_parent_dir, 'ray_results', 'swimmer', '2023-01-12_api_ppo_refit_ensemble_quad_quad_reset')
     _EVAL_SEED = 0
     
     # experiment configuration

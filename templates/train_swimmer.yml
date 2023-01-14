@@ -19,9 +19,9 @@
 #             explore: False
 #         evaluation_interval: 1
 
-drl_class: 'DDPG'
+drl_class: 'PPO'
 baseline: False
-train-iterations: 3000
+train-iterations: 3000 #3000
 
 drl_config: 
     env: SwimmerSurrogate
@@ -39,7 +39,7 @@ drl_config:
             mod_angles: False
             reset_on_bounds: False
         explore: False
-    evaluation_interval: 5
+    evaluation_interval: 1
     evaluation_duration: 10
 
 
@@ -60,6 +60,9 @@ init_collection:
     n_random_steps: 4000
     n_null_steps: 8000
     max_traj_len: 100
+
+sindy_fit:
+    fit_freq: 10 # how many training iterations to perform before fitting
 
 dyn_model_config:
     affine_config: 
