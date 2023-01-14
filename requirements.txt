@@ -1,0 +1,8 @@
+gym==0.26.2
+ray==2.0.0
+torch==1.13.0
+numpy
+pandas
+matplotlib
+PyYAML
+tqdm
