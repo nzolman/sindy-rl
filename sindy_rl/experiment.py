@@ -220,7 +220,8 @@ if __name__ == "__main__":
 
     
     # LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results', 'tmp')
-    LOCAL_DIR = os.path.join(_parent_dir, 'ray_results', 'swimmer', '2023-01-12_api_ppo_refit_ensemble_quad_quad_reset')
+    LOCAL_DIR = os.path.join(_parent_dir, 'ray_results', 'swimmer', '2023-01-13_ppo_sindy_reset_XP_quad_tensor', '16k_rand_0_null')
+                            #  '2023-01-12_api_ppo_refit_ensemble_cubic_int_tensor_reset')
     _EVAL_SEED = 0
     
     # experiment configuration
@@ -235,7 +236,7 @@ if __name__ == "__main__":
     
     drl_class, drl_default_config = get_algorithm_class(exp_config['drl_class'], 
                                                         return_config=True)
-    
+
     
     drl_config['env'] = getattr(ENVS, drl_config['env'] )
     # drl_config['evaluation_config']['seed'] = _EVAL_SEED
@@ -246,7 +247,10 @@ if __name__ == "__main__":
     
 
     # setup ray
-    ray.init()
+    ip_head = os.environ.get('ip_head', None)
+    ray.init(address=ip_head)
+    print(ray.nodes())
+    
     ray_config = exp_config['ray_config']
     run_config=air.RunConfig(
         local_dir=LOCAL_DIR,

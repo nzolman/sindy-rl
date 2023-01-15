@@ -1,24 +1,3 @@
-# DRL Algo config
-# drl_config: 
-#     environment:
-#         env: SwimmerSurrogate
-#         env_config:
-#             dyn_model: null # None
-#             max_episode_steps: 1000
-#             mod_angles: True
-#             reset_on_bounds: True
-#     framework: 
-#         framework: torch
-#     evaluation:
-#         evaluation_config:
-#             env_config:
-#                 dyn_model: null # None
-#                 max_episode_steps: 1000
-#                 mod_angles: True
-#                 reset_on_bounds: True
-#             explore: False
-#         evaluation_interval: 1
-
 drl_class: 'PPO'
 baseline: False
 train-iterations: 3000 #3000
@@ -48,17 +27,18 @@ ray_config:
     run_config:
         stop:
             # timesteps_total
-            num_env_steps_sampled: 1.2e+6 
+            num_env_steps_sampled: 1.2e+6
+        log_to_file: True 
     tune_config:
         num_samples: 20 # number of sample trials to run
-    checkpoint_freq: 10
+    checkpoint_freq: 50
 
 
 # SINDy Configs
 init_collection:
     collect_seed: 0 
-    n_random_steps: 4000
-    n_null_steps: 8000
+    n_random_steps: 16000
+    n_null_steps: 0
     max_traj_len: 100
 
 sindy_fit:
@@ -66,7 +46,7 @@ sindy_fit:
 
 dyn_model_config:
     affine_config: 
-        poly_deg: 2 
+        poly_deg: 2
         n_state: 8 
         n_control: 2
         poly_int: False
