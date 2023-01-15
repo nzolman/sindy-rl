@@ -1,6 +1,8 @@
-gym==0.26.2
 ray==2.0.0
+mujoco
+gym==0.26.2
 torch==1.13.0
+tensorboard
 numpy
 pandas
 matplotlib
