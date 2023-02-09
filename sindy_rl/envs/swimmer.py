@@ -40,14 +40,14 @@ class SwimmerSurrogate(SwimmerEnv):
         # ENFORCE FULL OBSERVABILITY
         # env_kwargs.update({'exclude_current_positions_from_observation': False})
         
-        
-        # need these to standardize the environment.
-        # quantifies when success is met.
         self.mod_angles = env_config.get('mod_angles', False)
         self.use_trig_obs = env_config.get('use_trig_obs', False)
+        # need these to standardize the environment.
+        # quantifies when success is met.
         self.max_episode_steps = env_config.get('max_episode_steps', 1000)
         self.reward_threshold = env_config.get('reward_threshold', 360.0)
         
+        self.use_surrogate_reward = env_config.get('use_surrogate_reward', False)
         self.reset_on_bounds = env_config.get('reset_on_bounds', True)
         self.bounds = _DEFAULT_ENV_BOUNDS
 
@@ -102,6 +102,17 @@ class SwimmerSurrogate(SwimmerEnv):
 
         observation = self._get_obs()
         reward = forward_reward - ctrl_cost
+        
+        # used for baselining the surrogate reward when
+        # xy_position before and after are not available to agent.
+        if self.use_surrogate_reward:
+            if self._exclude_current_positions_from_observation:
+                x_vel = self.state[3]
+            else: 
+                x_vel = self.state[5]
+            
+            reward = self.get_reward(action, x_vel)
+        
         info = {
             "reward_fwd": forward_reward,
             "reward_ctrl": -ctrl_cost,
