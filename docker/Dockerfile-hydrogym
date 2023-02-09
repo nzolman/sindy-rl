@@ -1,0 +1,47 @@
+FROM firedrakeproject/firedrake-env:latest AS hydrogym
+
+USER root
+RUN apt-get upgrade && apt-get update && \
+        apt-get install -y libhdf5-dev libxcursor-dev libxinerama1 texlive
+
+USER firedrake
+WORKDIR /home/firedrake
+
+# Install Firedrake and components
+RUN curl -O https://raw.githubusercontent.com/firedrakeproject/firedrake/master/scripts/firedrake-install
+# RUN bash -c "PETSC_CONFIGURE_OPTIONS='--download-fftw=1 --with-scalar-type=complex' python3 firedrake-install --no-package-manager --disable-ssh --remove-build-files --pip-install scipy"
+RUN bash -c "PETSC_CONFIGURE_OPTIONS='--download-fftw=1' python3 firedrake-install --no-package-manager --disable-ssh --remove-build-files --pip-install scipy"
+ENV VENV=/home/firedrake/firedrake
+
+# Install the complex version of firedrake (not differentiable, but useful for stability analysis)
+RUN bash -c "PETSC_CONFIGURE_OPTIONS='--download-fftw=1' python3 firedrake-install --no-package-manager --disable-ssh --remove-build-files --pip-install scipy --complex --venv-name=firedrake-complex"
+ENV VENV_COMPLEX=/home/firedrake/firedrake-complex
+
+RUN bash -c ". $VENV/bin/activate; firedrake-update --documentation-dependencies --tinyasm --slepc --install thetis --install gusto --install icepack --install irksome --install femlium"
+RUN bash -c ". $VENV_COMPLEX/bin/activate; firedrake-update --documentation-dependencies --tinyasm --slepc --install thetis --install gusto --install icepack --install irksome --install femlium"
+# ENV PATH="$VENV/bin:/home/firedrake/.local/bin:$PATH"
+
+# Install dependencies
+RUN bash -c ". $VENV/bin/activate && pip install --upgrade pip setuptools"
+RUN bash -c ". $VENV_COMPLEX/bin/activate && pip install --upgrade pip setuptools"
+
+
+# Setup Hydrogym
+RUN bash -c  ". $VENV/bin/activate && pip install hydrogym"
+# setup default python environment
+RUN bash -c "source $VENV/bin/activate"
+
+RUN bash -c "echo 'source $VENV/bin/activate' >> /home/firedrake/.bashrc"
+RUN bash -c "source /home/firedrake/.bashrc"
+
+# SINDy
+WORKDIR /home/firedrake/sindy-build
+COPY --chown=firedrake ./requirements.txt .
+
+RUN bash -c ". $VENV/bin/activate && pip install -r requirements.txt"
+
+# This could be a bad idea.
+USER root
+WORKDIR /home/firedrake
+RUN bash -c "echo 'source $VENV/bin/activate' >> /root/.bashrc"
+RUN bash -c "source /root/.bashrc"
