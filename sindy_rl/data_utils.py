@@ -26,7 +26,7 @@ def collect_random_data(env, n_steps, seed=None, use_null = None, max_traj_len =
         observation, reward, done, info = env.step(action)
         observations.append(observation)
         
-        if max_traj_len and i % max_traj_len == 0: 
+        if (max_traj_len and i % max_traj_len == 0) or (i == n_steps): 
             done = True
 
         if done:
