@@ -1,0 +1,1 @@
+docker build -t hydrogym-sindy:latest -f ./Dockerfile-hydrogym .

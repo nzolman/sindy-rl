@@ -39,7 +39,7 @@ WORKDIR /home/firedrake/sindy-build
 COPY --chown=firedrake ./requirements.txt .
 
 RUN bash -c ". $VENV/bin/activate && pip install -r requirements.txt"
-
+RUN bash -c ". $VENV/bin/activate && pip install gym==0.26.2"
 # This could be a bad idea.
 USER root
 WORKDIR /home/firedrake

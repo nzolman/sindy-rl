@@ -1,0 +1,13 @@
+ray[rllib,tune]==2.0.0
+mujoco
+# gym==0.26.2
+torch==1.13.0
+tensorboard
+numpy
+pandas
+matplotlib
+seaborn
+PyYAML
+tqdm
+pysindy
+jupyterlab
