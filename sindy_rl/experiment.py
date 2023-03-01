@@ -5,8 +5,10 @@ import random
 import numpy as np
 import yaml
 import pickle
-
+from collections import deque
+from itertools import chain
 import pysindy as ps
+import pickle
 
 from sindy_rl.sindy_utils import get_affine_lib
 from sindy_rl.dynamics import EnsembleSINDyDynamics
@@ -94,7 +96,11 @@ def on_policy_real_traj(env, policy, n_steps=1000, seed=0, explore=False):
         action = policy.compute_single_action(obs, explore=explore)
         obs, rew, done, info = env.step(action)
         obs_list.append(obs)
-        act_list.append(action)
+        
+        # subtlety where the environment action may not
+        # map back to the action in the dynamics model.
+        mapped_action = env.action_map(action)
+        act_list.append(mapped_action)
         if done or (i == n_steps -1):
             obs_list.pop(-1)
             
@@ -140,23 +146,49 @@ def setup_dyn_model(affine_config=None, base_config = None, ensemble_config=None
 
 def num_samples(x_train):
     return np.sum([len(x) for x in x_train])
-        
+
+
 def experiment(config):
-    u_train_buffer = []
-    x_train_buffer = []
     SINDY_FIT_FREQ = config['sindy_fit']['fit_freq']
     CHECKPOINT_FREQ = config['ray_config']['checkpoint_freq']
     baseline = config['baseline']
     
-    drl_config = config['drl_config']
-    drl_class = config['drl_class']
-    n_dyn_updates = 0
-    
     # TO-DO: Find a better place for this
     train_iterations = config.pop("train-iterations")
     
+    drl_config = config['drl_config']
+    drl_class = config['drl_class']
+    
+    # on-pi: on-policy, agent collects data
+    # off-pi: off-policy, data random or null
+    n_pi_collect = config['sindy_fit']['n_pi_collect']
+    n_off_init = config['init_collection']['n_random_steps'] + config['init_collection']['n_null_steps']
+    
+    # Each element of the deque is the _set_ of trajectories from the update
+    # Maximal number of updates is the total number of on-policy interactions (equal to off-policy by default)
+    #  divided by the total number of steps being colleced. So if n_off_init = 12k (4k rand + 8k null)
+    #  and n_pi_collect = 1000, max number of updates is 12. Now the number of trajectories per update
+    #  can still fluctuate. But we'll discard all trajectories from an update once we've reached our maximum threshold
+    on_pi_x_buffer = deque([], n_off_init//n_pi_collect)
+    on_pi_u_buffer = deque([], n_off_init//n_pi_collect)
+    
+    off_pi_x_xp = []
+    off_pi_u_xp = []
+    on_pi_x_xp = []
+    on_pi_u_xp = []
+    x_buffer_xp = []
+    u_buffer_xp = []
+
+    n_dyn_updates = 0
+
     algo = drl_class(config=drl_config)
     
+    # TO-DO: 
+    # - Allow for loading of saved data
+    # - Allow for loading of a model
+    # - Replace n_control and n_state after finding out the size of x_train and u_train!!
+    # probably have to use a ray store... unless we do this before we create the ray object.
+    # be careful! If passing the data, it probably gets saved in a JSON somewhere. Could bloat
     if not baseline:
         # a hack to get an environment to fit on
         env_config = drl_config['env_config']
@@ -164,14 +196,22 @@ def experiment(config):
         env.dyn_model = None  # ensure that we're using the true dynamics
 
         # collect trajectories
-        x_train, u_train = collect_real_traj(env, **config['init_collection'])
+        load_path = config['init_collection'].get('load_path',None)
+        if load_path:
+            with open(load_path, 'rb') as f:
+                data = pickle.load(f)
+                x_train, u_train = data['x'], data['u']
+        else:
+            x_train, u_train = collect_real_traj(env, **config['init_collection'])
         # setup dyn model
         dyn_config = config['dyn_model_config']
+        
+        # to-do: This might need to go inside an environment instead.
         dyn_model = setup_dyn_model(**dyn_config)
         dyn_model.fit(x_train, u_train)
 
-        u_train_buffer += u_train
-        x_train_buffer += x_train
+        off_pi_u_xp += u_train
+        off_pi_x_xp += x_train
 
         algo.workers.foreach_worker(update_env_dyn_model(dyn_model))
     else:
@@ -184,31 +224,52 @@ def experiment(config):
     for i in range(train_iterations):
         train_results = algo.train()
         
-        if i % CHECKPOINT_FREQ == 0 or i == train_iterations - 1:
+        # checkpoint the agent and dynamics model
+        if (i % CHECKPOINT_FREQ == 0) or (i == train_iterations - 1):
             checkpoint = algo.save(tune.get_trial_dir())
             dyn_path = os.path.join(tune.get_trial_dir(), f'checkpoint_{i+1:06}', 'dyn_model.pkl')
             with open(dyn_path, 'wb') as f:
                 pickle.dump(dyn_model, f)
-            
-        if i % SINDY_FIT_FREQ == 0 and not baseline:
+        
+        # update the SINDy model
+        # TO-DO: make it so we don't necessarily have to fit SINDy
+        if (i % SINDY_FIT_FREQ) == (SINDY_FIT_FREQ - 1) and not baseline:
             n_dyn_updates += 1
             x_train, u_train = on_policy_real_traj(env, algo, 
-                                                   n_steps=1000, seed=0, 
+                                                   n_steps=n_pi_collect, seed=0, 
                                                    explore=False)
-            x_train_buffer += x_train
-            u_train_buffer += u_train
-
-            dyn_model.fit(x_train_buffer, u_train_buffer)
-            algo.workers.foreach_worker(update_env_dyn_model(dyn_model))
+            # add XP to deque
+            on_pi_u_buffer.append(u_train)
+            on_pi_x_buffer.append(x_train)
             
+            # extract xp
+            on_pi_x_xp = list(chain(*on_pi_x_buffer))
+            on_pi_u_xp = list(chain(*on_pi_u_buffer))
+            
+            # combine on- and off-policy data
+            x_buffer_xp =  on_pi_x_xp + off_pi_x_xp
+            u_buffer_xp =  on_pi_u_xp + off_pi_u_xp
+            
+            dyn_model.fit(x_buffer_xp, u_buffer_xp)
+            algo.workers.foreach_worker(update_env_dyn_model(dyn_model))
+        
+        
+        # TO-DO: add in model metrics: sparsity, test score (on-policy, off-policy)
+        if not baseline:
+            n_samples_on_pi =  num_samples(on_pi_x_xp)
+            n_samples_off_pi =  num_samples(off_pi_x_xp)
+            n_traj_on_pi = len(on_pi_x_xp)
+            n_traj_off_pi = len(off_pi_x_xp)
             sindy_results = {'n_dyn_updates': n_dyn_updates,
-                             'n_samples': num_samples(x_train_buffer),
-                             'n_traj': len(x_train_buffer)
-                             }
+                                'n_samples': n_samples_on_pi + n_samples_off_pi,
+                                'n_samples_on_pi': n_samples_on_pi,
+                                'n_sampels_off_pi': n_samples_off_pi,
+                                'n_traj': n_traj_on_pi  + n_traj_off_pi,
+                                'n_traj_on_pi': n_traj_on_pi,
+                                'n_traj_off_pi': n_traj_off_pi
+                                }
             train_results['sindy'] = sindy_results
         tune.report(**train_results)
-        
-        
         
     algo.stop()
 
@@ -217,15 +278,16 @@ def experiment(config):
 if __name__ == "__main__":
     from ray.rllib.algorithms.registry import get_algorithm_class
     from sindy_rl import envs as ENVS
-
     
-    # LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results', 'tmp')
-    LOCAL_DIR = os.path.join(_parent_dir, 'ray_results', 'swimmer', '2023-01-13_ppo_sindy_reset_XP_quad_tensor', '16k_rand_0_null')
+    LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results', 'tmp', 'pinball', '2023-02-21')
+    # LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results', 'cylinder', 'test', 'collect_C_L=1')
+    # LOCAL_DIR = os.path.join(_parent_dir, 'ray_results', 'swimmer', '2023-01-21_ppo_baseline', 'reset_reward')
                             #  '2023-01-12_api_ppo_refit_ensemble_cubic_int_tensor_reset')
     _EVAL_SEED = 0
     
     # experiment configuration
-    template_fpath = os.path.join(_TEMPLATES_PATH, 'train_swimmer.yml')
+    # template_fpath = os.path.join(_TEMPLATES_PATH, 'train_swimmer.yml')
+    template_fpath = os.path.join(_TEMPLATES_PATH, 'pinball.yml')
     with open(template_fpath, 'r') as f: 
         exp_config = yaml.safe_load(f)
     

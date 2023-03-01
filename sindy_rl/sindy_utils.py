@@ -1,7 +1,38 @@
 import numpy as np
 import pysindy as ps
 
-def get_affine_lib(poly_deg, n_state=2, n_control = 2, poly_int=False, tensor=False):
+def lin_and_cube_library(poly_int = False):
+    '''
+    Restricted polynomial library to cubic and linear combinations.
+    
+    Parameters:
+        `poly_int` (bool): whether to into include polynomial (cubic)
+            interaction terms (e.g. x^2 y). If False, just include homogenous
+            terms (e.g. x^3, y^3)
+    '''
+    if poly_int:
+        library_functions = [
+            lambda x: x,
+            lambda x,y: x * y**2,
+            lambda x: x**3
+        ]
+        library_names = [lambda x: x, 
+                         lambda x,y: f'{x} {y}^2', 
+                         lambda x: f'{x}^3'
+                         ]
+    else:
+        library_functions = [
+            lambda x: x,
+            lambda x: x**3
+        ]
+        library_names = [lambda x: x, lambda x: f'{x}^3']
+
+    polyLibCustom = ps.CustomLibrary(library_functions=library_functions, 
+                                    function_names = library_names)
+
+    return polyLibCustom
+
+def get_affine_lib(poly_deg, n_state=2, n_control = 2, poly_int=False, tensor=False, use_cub_lin=False):
     '''
     Create control-affine library of the form:
         x_dot = p_1(x) + p_2(x)u
@@ -19,9 +50,13 @@ def get_affine_lib(poly_deg, n_state=2, n_control = 2, poly_int=False, tensor=Fa
                     library)
     
     '''
-    polyLib = ps.PolynomialLibrary(degree=poly_deg, 
-                                    include_bias=False, 
-                                    include_interaction=poly_int)
+    if use_cub_lin:
+        assert poly_deg==3, 'poly_deg must be 3 to use custom Cubic + Linear library'
+        polyLib = lin_and_cube_library(poly_int = poly_int) 
+    else:
+        polyLib = ps.PolynomialLibrary(degree=poly_deg, 
+                                        include_bias=False, 
+                                        include_interaction=poly_int)
     affineLib = ps.PolynomialLibrary(degree=1, 
                                     include_bias=False, 
                                     include_interaction=False)
