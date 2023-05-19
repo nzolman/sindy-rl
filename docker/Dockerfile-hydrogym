@@ -45,3 +45,6 @@ USER root
 WORKDIR /home/firedrake
 RUN bash -c "echo 'source $VENV/bin/activate' >> /root/.bashrc"
 RUN bash -c "source /root/.bashrc"
+
+RUN apt-get install -y tmux htop 
+RUN bash -c "git config --global --add safe.directory '*'"

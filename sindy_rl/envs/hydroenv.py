@@ -126,6 +126,85 @@ class SurrogateHydroEnv(hgym.FlowEnv):
         
         return np.array(self.state)
     
+class SurrogateCylinderLIFT(SurrogateHydroEnv):
+    '''
+    Just modeling C_L and dC_L
+    '''
+    def __init__(self, env_config=None):
+        config = env_config.copy()
+        
+        default_flow_config =  {
+            "flow": hgym.Cylinder,
+            "solver": hgym.IPCS,
+            "flow_config": {
+                'mesh': 'coarse'
+            }
+        }
+        
+        flow_config = config.get('hydro_config', {})
+        default_flow_config.update(flow_config)
+        config['hydro_config'] = default_flow_config
+        
+        self.obs_clip_val = 100
+        super(SurrogateCylinderLIFT, self).__init__(config)
+        self._init_augmented_obs()
+        
+    def _init_augmented_obs(self):
+        obs_dim = 2
+        self.observation_space = Box( 
+                                     low=-np.inf,
+                                     high=np.inf,
+                                     shape=(obs_dim,),
+                                     dtype=PDEBase.ScalarType,
+                                     )
+    def get_CL_dot(self): 
+        # only to be used by the real env!
+        return (self.hydro_state - self.prev_hydro_state)[0]/self.solver.dt
+    
+    def clip_obs(self, state):
+        '''
+        Clips Observation between bounds
+        '''
+        return np.clip(state, -self.obs_clip_val, self.obs_clip_val)
+    
+    def build_augmented_obs(self):
+        '''
+        Builds augmented obs for the REAL environment
+        '''
+        obs = [self.hydro_state[0], self.get_CL_dot()]
+        return np.array(obs)
+    
+    def surrogate_reward(self):
+        CL, dCL = self.state
+        CD_approx = (3.3223e-01)*(CL**2) + (1.6932e-01)*(dCL**2)
+        return -1.0 * (CD_approx)
+
+    def step(self, action):
+        '''Overwrite just to build the augmented observation'''
+        self.action = action
+        self.state, rew, done, info = super(SurrogateCylinderLIFT, self).step(action)
+        
+        if not self.dyn_model: 
+            # augment the observation
+            # NOTE: this isn't needed when there's a dynamics
+            # model because the state should already have the full
+            # size
+            self.state = self.build_augmented_obs()
+        
+        if self.obs_clip_val:
+            self.state = self.clip_obs(self.state)
+            
+        # !!!!NOTE THIS WAS JUST FOR TESTING!!!
+        rew = self.surrogate_reward()
+        return self.state, rew, done, info 
+    
+    def reset(self, **reset_kwargs):
+        self.state = super(SurrogateCylinderLIFT, self).reset(**reset_kwargs)
+        self.state = self.build_augmented_obs()
+        return self.state
+    
+
+        
 class SurrogateCylinder(SurrogateHydroEnv):
     def __init__(self, env_config=None):
         # TO DO: generalize the scheme, 
@@ -163,8 +242,20 @@ class SurrogateCylinder(SurrogateHydroEnv):
         # TO-DO: Figure out how to relax this reward condition
         CL, CD = self.state[:2]
         # !!!! JUST FOR TESTING
-        ref = 1
-        return -1 * np.abs(CL- ref)
+        # ref = 1
+        # return -1 * np.abs(CL- ref)
+        CD_rew = -1.0 * np.linalg.norm(CD)
+        CL_rew = -0.0 * np.linalg.norm(CL)
+        rew = CD_rew + CL_rew
+        
+        if self.use_CL_dot:
+            # JUST FOR TESTING, BE CAREFUL IF CHANGING OBSERVATION SPACE
+            CL_dot = self.state[-1]
+            rew += -0.0 * np.linalg.norm(CL_dot)
+            
+        rew += - 0.0 * np.linalg.norm(self.action)
+        
+        return rew
     
     def get_omega(self):
         return self.flow.actuators[0].u.values()[0]
@@ -172,6 +263,10 @@ class SurrogateCylinder(SurrogateHydroEnv):
     def get_CL_dot(self): 
         # only to be used by the real env!
         return (self.hydro_state - self.prev_hydro_state)[0]/self.solver.dt
+    
+    def get_CD_dot(self): 
+        # only to be used by the real env!
+        return (self.hydro_state - self.prev_hydro_state)[1]/self.solver.dt
     
     def build_augmented_obs(self):
         '''
@@ -194,6 +289,7 @@ class SurrogateCylinder(SurrogateHydroEnv):
     
     def step(self, action):
         '''Overwrite just to build the augmented observation'''
+        self.action = action
         self.state, rew, done, info = super(SurrogateCylinder, self).step(action)
         
         if not self.dyn_model: 
@@ -215,6 +311,126 @@ class SurrogateCylinder(SurrogateHydroEnv):
         self.state = self.build_augmented_obs()
         return self.state
 
+
+class SurrogatePinballLIFT(SurrogateHydroEnv):
+    def __init__(self, env_config=None):
+        config = env_config.copy()
+        
+        default_flow_config =  {
+            "flow": hgym.Pinball,
+            "solver": hgym.IPCS,
+            "flow_config": {
+                'mesh': 'coarse'
+            }
+        }
+        
+        flow_config = config.get('hydro_config', {})
+        default_flow_config.update(flow_config)
+        config['hydro_config'] = default_flow_config
+        
+        self.MAX_TORQUE = config.get('max_torque', 0.5*np.pi)
+        super(SurrogatePinballLIFT, self).__init__(config)
+        self._init_augmented_obs()
+        self._init_action_space()
+        
+    def _init_augmented_obs(self):
+        # TO-DO: probably clean this up for the pinball
+        obs_dim = 6 # CL and CL_dot
+        self.observation_space = Box( 
+                                     low=-np.inf,
+                                     high=np.inf,
+                                     shape=(obs_dim,),
+                                     dtype=PDEBase.ScalarType,
+                                     )
+        
+    def _init_action_space(self):
+        act_dim = 1 #self._control_mode
+        self.action_space = Box(low = -self.MAX_TORQUE,
+                                high = self.MAX_TORQUE,
+                                shape = (act_dim, ),
+                                dtype=self.flow.ScalarType,
+                                )
+        
+    def get_CL_dot(self): 
+        # only to be used by the real env!
+        return (self.hydro_state - self.prev_hydro_state)[0:3]/self.solver.dt
+    
+    def build_augmented_obs(self):
+        '''
+        Builds augmented obs for the REAL environment
+        '''
+        obs = [*self.hydro_state]
+        obs = obs[:3]
+        obs += list(self.get_CL_dot())
+        return np.array(obs)
+    
+    def surrogate_reward(self):
+        # TO-DO: Figure out how to relax this reward condition
+        CL = self.state[:3]
+        dCL = self.state[3:]
+        # '2.1100e+00 1', '9.8199e-01 x1', '-1.7894e+00 x2', '8.7083e-01 x0^2', '1.9215e+00 x0 x1', '8.4430e-01 x0 x2', '-5.5262e-01 x0 x4', '2.5506e+00 x1^2', '5.2062e-01 x1 x2', '-1.4449e+00 x1 x4', '-8.9934e-01 x1 x5', '1.9924e+00 x2^2', '-1.2288e+00 x2 x4', '-1.5884e+00 x2 x5'
+        
+        return -1.0 * np.linalg.norm(CL)**2 -1.0 * np.linalg.norm(dCL)**2 
+
+    def action_map(self, action):
+        '''
+        Maps `action` (dim=1,2,3) based off the control mode and
+            to the corresponding `new_action` with three dimensions.
+        '''
+        new_action = np.array([0, action, -1 * action])
+        return new_action
+
+
+    def step(self, action):
+        '''Overwrite just to build the augmented observation'''
+        self.action = action
+        self.physical_action = self.action_map(self.action)
+        self.state, rew, done, info = super(SurrogatePinballLIFT, self).step(self.physical_action)
+        
+        if not self.dyn_model: 
+            # augment the observation
+            # NOTE: this isn't needed when there's a dynamics
+            # model because the state should already have the full
+            # size
+            self.state = self.build_augmented_obs()
+        
+        # removed for lift env
+        # if self.obs_clip_val:
+            # self.state = self.clip_obs(self.state)
+            
+        # !!! NOTE THE INTENT OF THIS WAS JUST FOR TESTING!!!
+        rew = self.surrogate_reward()
+        return self.state, rew, done, info 
+    
+    def reset(self, **reset_kwargs):
+        self.state = super(SurrogatePinballLIFT, self).reset(**reset_kwargs)
+        self.state = self.build_augmented_obs()
+        return self.state
+    
+    def render(self, mode="human", clim=None, levels=None, cmap="RdBu", **kwargs):
+        if clim is None:
+            clim = (-2, 2)
+        if levels is None:
+            levels = np.linspace(*clim, 10)
+        vort = fd.project(fd.curl(self.flow.u), self.flow.pressure_space)
+        im = fd.tricontourf(
+            vort,
+            cmap=cmap,
+            levels=levels,
+            vmin=clim[0],
+            vmax=clim[1],
+            extend="both",
+            **kwargs,
+        )
+
+        # this is broken
+        # for (x0, y0) in zip(self.flow.x0, self.flow.y0):
+        #     cyl = plt.Circle((x0, y0), self.flow.rad, edgecolor="k", facecolor="gray")
+        #     im.axes.add_artist(cyl)
+    
+        return im
+
+
 class SurrogatePinball(SurrogateHydroEnv):
     def __init__(self, env_config=None):
         # TO DO: generalize the scheme, 
@@ -225,7 +441,7 @@ class SurrogatePinball(SurrogateHydroEnv):
             "flow": hgym.Pinball,
             "solver": hgym.IPCS,
             "flow_config": {
-                'mesh': 'coarse'
+                'mesh': 'fine'
             }
         }
         
@@ -328,7 +544,7 @@ class SurrogatePinball(SurrogateHydroEnv):
             try:
                 # handle if action is a single-element array
                 action = action[0]
-            except TypeError:
+            except (TypeError, IndexError):
                 action = action
             new_action = np.array([0, action, -1 * action])
 
