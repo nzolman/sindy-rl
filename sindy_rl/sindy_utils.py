@@ -91,6 +91,59 @@ def get_affine_lib(poly_deg, n_state=2, n_control = 2, poly_int=False, tensor=Fa
     )
     return generalized_library
 
+def get_affine_lib_from_base(base_lib, n_state=2, n_control = 2, include_bias = False):
+    '''
+    Returns library for regression of the form:
+        W Phi(x) + W2 Phi(x) u
+        
+        `base_lib`  (ps.FeatureLibrary)
+            base library, Phi
+        `n_state`   (int):  The dimension of the state variable x
+        `n_control` (int):  The dimension of the control variable u
+    '''
+    control_lib = ps.PolynomialLibrary(degree=1, 
+                                    include_bias=False, 
+                                    include_interaction=False)
+
+    # For the first library, don't use any of the control variables.
+    # forcing this to be zero just ensures that we're using the "zero-th"
+    # indexed variable. The source code uses a `np.unique()` call
+    inputs_state_library = np.arange(n_state + n_control)
+    inputs_state_library[-n_control:] = 0
+    
+    # For the second library, we only want the control variables.
+    #  forching the first `n_state` terms to be n_state + n_control - 1 is 
+    #  just ensuring that we're using the last indexed variable (i.e. the
+    #  last control term).
+    inputs_control_library = np.arange(n_state + n_control)
+    inputs_control_library[:n_state] = n_state + n_control -1
+    
+    inputs_per_library = np.array([
+                                    inputs_state_library,
+                                    inputs_control_library
+                                    ], dtype=int)
+
+    tensor_array = np.array([[1, 1]])
+
+    libs = [base_lib, control_lib]
+    if include_bias:
+        libs = [ps.PolynomialLibrary(degree=0), base_lib, control_lib]
+        tensor_array = np.array([[0, 1, 1,]])
+        inputs_per_library = np.array([
+                                    np.zeros(n_state + n_control),
+                                    inputs_state_library,
+                                    inputs_control_library,
+                                    ], dtype=int)
+    generalized_library = ps.GeneralizedLibrary(
+        libs,
+        tensor_array=tensor_array,
+        inputs_per_library=inputs_per_library,
+    )
+    return generalized_library
+
+
+
+
 if __name__ == '__main__': 
     lib = get_affine_lib(poly_deg=2)
     
