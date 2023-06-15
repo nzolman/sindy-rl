@@ -1,0 +1,27 @@
+exp_dir: tmp2
+
+drl:
+  class: PPO
+  config:
+    env: SwimmerWithBoundsClassic
+    env_config:
+      reset_on_bounds: False
+      noise: [0.10, 0.18, 0.18, 0.065, 0.20, 0.20, 0.41, 0.41]
+    framework: torch
+    evaluation_config:
+      env_config:
+        reset_on_bounds: False
+        explore: False
+    evaluation_interval: 1
+    evaluation_duration: 10
+
+ray_config:
+    run_config:
+        name: "test_swimmer_baseline_no_reset_yes_noise"
+        stop:
+            # timesteps_total
+            num_env_steps_sampled: 1.2e+6
+        log_to_file: True 
+    tune_config:
+        num_samples: 20 # number of sample trials to run
+    checkpoint_freq: 50

@@ -1,0 +1,246 @@
+import gym
+from gym.spaces.box import Box
+import numpy as np
+import pysindy as ps
+
+from sindy_rl.refactor.dynamics import EnsembleSINDyDynamicsModel
+from sindy_rl.refactor.reward import EnsembleSparseRewardModel
+from sindy_rl.refactor import registry
+
+def safe_reset(res):
+    '''
+    A ''safe'' wrapper for dealing with OpenAI gym's refactor.
+    '''
+    if isinstance(res[-1], dict):
+        return res[0]
+    else:
+        return res
+    
+def replace_with_inf(arr, neg):
+    replace_with = np.inf
+    if neg:
+        replace_with *= -1
+    return np.nan_to_num(arr, nan=replace_with)
+
+
+def rollout_env(env, policy, n_steps, n_steps_reset=np.inf, seed=None):
+    '''
+    returns lists of obs, acts, rews trajectories
+    '''
+    obs_list = [safe_reset(env.reset(seed=seed))]
+    act_list = []
+    rew_list = []
+    
+    trajs_obs = []
+    trajs_acts = []
+    trajs_rews = []
+
+    for i in range(n_steps):
+        action = policy.compute_action(obs_list[-1])
+        obs, rew, done, info = env.step(action)
+        act_list.append(action)
+        obs_list.append(obs)
+        rew_list.append(rew)
+
+        if done or len(obs_list) > n_steps_reset:
+            obs_list.pop(-1)
+            trajs_obs.append(np.array(obs_list))
+            trajs_acts.append(np.array(act_list))
+            trajs_rews.append(np.array(rew_list))
+
+            obs_list = [safe_reset(env.reset())]
+            act_list = []
+            rew_list = [] 
+            
+    if len(act_list) != 0:
+        obs_list.pop(-1)
+        trajs_obs.append(np.array(obs_list))
+        trajs_acts.append(np.array(act_list))
+        trajs_rews.append(np.array(rew_list))
+    return trajs_obs, trajs_acts, trajs_rews
+
+
+class BaseSurrogateEnv(gym.Env):
+    '''
+    NOTE: original intent of allowing real-env is to be able to 
+    use callbacks and/or intialize an evaluation environment
+    using RLLib. It was not strictly necessary to use. HOWEVER,
+    need a way to reset the environment, and the real-env makes that
+    extremely easy.
+    '''
+    def __init__(self, config):
+        self.config = config
+        self.max_episode_steps = self.config.get('max_episode_steps', 1000)
+        self.n_episode_steps = 0
+        
+        self.real_env_class = self.config.get('real_env_class', None)
+        self.real_env_config = self.config.get('real_env_config', {})
+        # self.surrogate_config = self.config['surrogate_config']
+        self.dynamics_model_config = self.config['dynamics_model_config']
+        self.rew_model_config = self.config['rew_model_config']
+        self.use_real_env = False
+        self.real_env = False
+        self.obs = None
+        self.action = None
+        
+        if self.config.get('init_real_on_start', False):
+            self.init_real_env()
+        
+        if self.config.get('use_real_env', False):
+            self.use_real_env = True
+        
+    
+    def _init_act(self):
+        self.act_dim = self.config['act_dim']
+        self.act_bounds = np.array(self.config.get('act_bounds'), dtype=float).T   
+        self.act_bounds[0] = replace_with_inf(self.act_bounds[0], neg=True)
+        self.act_bounds[1] = replace_with_inf(self.act_bounds[1], neg=False)
+        self.action_space = Box(low=self.act_bounds[0], 
+                                high = self.act_bounds[1])
+        
+    def _init_obs(self):
+        self.obs_dim = self.config['obs_dim']
+        self.obs_bounds = np.array(self.config.get('obs_bounds'), dtype=float).T   
+        self.obs_bounds[0] = replace_with_inf(self.obs_bounds[0], neg=True)
+        self.obs_bounds[1] = replace_with_inf(self.obs_bounds[1], neg=False)
+        
+        self.observation_space = Box(low= -np.inf * np.ones(self.obs_dim), #self.obs_bounds[0], 
+                                    high = np.inf * np.ones(self.obs_dim) # self.obs_bounds[1])
+                                    )
+        
+    def _init_dynamics_model(self):
+        raise NotImplementedError
+
+    def _init_rew_model(self):
+        raise NotImplementedError
+
+    def switch_on_real_env_(self):
+        '''Use real env for step updates'''
+        self.use_real_env = True
+        
+    def switch_off_real_env_(self):
+        '''Use surrogate env for step updates'''
+        self.use_real_env = False
+
+    def init_real_env(self, env=None, reset=True, seed=0):
+        '''
+        Initialize real environment (for computation purposes, may not always want to init)
+        
+        Inputs:
+            env: (gym.env-like)
+                the real environment with gym.evn-like API (step, reset, etc.)
+            reset: (bool)
+                whether to reset the environment upon initialization
+            seed: (int)
+                the seed to reset the enviornment. Only used if `reset`==True
+        '''
+        if env:
+            self.real_env = env
+        else:
+            if isinstance(self.real_env_class, str):
+                self.real_env_class = getattr(registry, self.real_env_class)
+            
+            self.real_env = self.real_env_class(self.real_env_config)
+
+        if reset:
+            self.real_env.reset(seed=seed)
+        return self.real_env 
+    
+    def is_done(self):
+        '''Computes whether the episode has terminated'''
+        raise NotImplementedError
+    
+    def step(self, action):
+        '''Steps through the real or surrogate environment'''
+        self.action = action
+        if self.use_real_env:
+            return self.real_env.step(self.action)
+        
+        
+        next_obs = self.dynamics_model.predict(self.obs, self.action)
+        rew = self.rew_model.predict(next_obs, self.action)
+        
+        self.n_episode_steps +=1
+        self.obs = next_obs
+        done = self.is_done()
+        return self.obs, rew, done, {}
+    
+    def reset(self, seed=0):
+        '''Resets the environment'''
+        self.n_episode_steps = 0
+        self.obs = safe_reset(self.real_env.reset(seed=seed))
+        return self.obs
+
+class BaseEnsembleSurrogateEnv(BaseSurrogateEnv):
+    '''Wrapper to initialize surrogate environment with Ensemble SINDy dynamics models'''
+    def __init__(self, config):
+        super().__init__(config)
+        
+        self._init_weights = self.config.get('init_weights', False)
+        self.ensemble_mode = self.config.get('ensemble_mode', 'median')
+        self.use_bounds = self.config.get('use_bounds', True)
+        self._init_act()
+        self._init_obs()
+        
+        self._init_dynamics_model()
+        self._init_rew_model()
+        self.set_ensemble_mode_(mode=self.ensemble_mode)
+    
+    def set_ensemble_mode_(self, mode=None, valid=False):
+        '''Set the behavior of the ensemble model'''
+        
+        self.ensemble_mode = mode
+        assert mode in ['sample', 'mean', 'median'], f'Invalid dynamcis mode: {mode}'
+        if mode == 'sample':
+            self.dynamics_model.set_rand_coef_(valid=valid)
+            self.rew_model.set_rand_coef_(valid=valid)
+        elif mode == 'mean': 
+            self.dynamics_model.set_mean_coef_(valid=valid)
+            self.rew_model.set_mean_coef_(valid=valid)
+        elif mode == 'median':
+            self.dynamics_model.set_median_coef_(valid=valid)
+            self.rew_model.set_median_coef_(valid=valid)
+
+    def _init_dynamics_model(self):
+        '''Initialize dynamics model'''
+        # TO DO: Make this more general!
+        self.dynamics_model = EnsembleSINDyDynamicsModel(self.dynamics_model_config)
+        
+        # init weights
+        if self._init_weights: 
+            x_tmp = np.ones((10, self.obs_dim))
+            u_tmp = np.ones((10, self.act_dim))
+            self.dynamics_model.fit([x_tmp], [u_tmp])
+
+    def _init_rew_model(self):
+        '''Initialize reward model'''
+        self.rew_model = EnsembleSparseRewardModel(self.rew_model_config)
+        
+        if self._init_weights: 
+            x_tmp = np.ones((10, self.obs_dim))
+            u_tmp = np.ones((10, self.act_dim))
+            r_tmp = np.ones((10, 1))
+            self.rew_model.fit([x_tmp], U=[u_tmp], Y=[r_tmp])
+  
+    def update_models_(self, dynamics_weights=None, reward_weights=None):
+        '''Wrapper for setting different model weights'''
+        if dynamics_weights:
+            self.dynamics_model.set_ensemble_coefs_(dynamics_weights)
+        if reward_weights:
+            self.rew_model.set_ensemble_coefs_(reward_weights)
+        self.set_ensemble_mode_(mode=self.ensemble_mode)
+    
+    def is_done(self):
+        done = (self.n_episode_steps >= self.max_episode_steps)
+        if self.use_bounds:
+            lower_bounds_done = np.any(self.obs <= self.obs_bounds[0])
+            upper_bounds_done = np.any(self.obs >= self.obs_bounds[1])
+            done = done or lower_bounds_done or upper_bounds_done
+        
+        return done
+        
+    def reset(self, **kwargs):
+        obs = super().reset(**kwargs)
+        # resample if necessary
+        self.set_ensemble_mode_(mode=self.ensemble_mode)
+        return obs
