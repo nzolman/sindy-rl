@@ -1,7 +1,9 @@
 n_train_iter: 3000
-dyn_fit_freq: 10
+dyn_fit_freq: 5
 exp_dir: tmp2
 
+# used for rolling out new on-policy data for 
+# dynamics fitting
 real_env:
   class: SwimmerWithBoundsClassic
   config: 
@@ -9,17 +11,17 @@ real_env:
     max_episode_steps: 1000
     reward_threshold: 360
     reset_on_bounds: True
-    noise: [0.10, 0.18, 0.18, 0.065, 0.20, 0.20, 0.41, 0.41]
+    # noise: [0.10, 0.18, 0.18, 0.065, 0.20, 0.20, 0.41, 0.41]
 
 drl:
   class: PPO
   config:
     env: 
     env_config:
-      noise: [0.10, 0.18, 0.18, 0.065, 0.20, 0.20, 0.41, 0.41]
       real_env_class: SwimmerWithBoundsClassic
       real_env_config: 
         reset_on_bounds: True
+        # noise: [0.10, 0.18, 0.18, 0.065, 0.20, 0.20, 0.41, 0.41]
       init_real_on_start: True
       ensemble_mode: median
       init_weights: True
@@ -29,7 +31,7 @@ drl:
         - [-1, 1]
         - [-1, 1]
       obs_bounds: 
-        - [-3.1415, 3.14159]
+        - [-3.1415, 3.1415]
         - [-1.7453, 1.7453]
         - [-1.7453, 1.7453]
         - [-10, 10]
@@ -39,7 +41,7 @@ drl:
         - [-10, 10]
 
     framework: torch
-    # Figure out the best way to put this back in
+
     evaluation_config:
       env_config:
         init_real_on_start: True
@@ -47,6 +49,7 @@ drl:
         use_bounds: False
         real_env_class: SwimmerWithBoundsClassic
         real_env_config: 
+          # noise: [0.10, 0.18, 0.18, 0.065, 0.20, 0.20, 0.41, 0.41]
           reset_on_bounds: False
           max_episode_steps: 1000
           reward_threshold: 360
@@ -122,7 +125,7 @@ rew_model:
 
 ray_config:
     run_config:
-        name: "test_swimmer_affine_12k_10_eval_real"
+        name: "test_swimmer_affine_12k_med_refit_5"
         stop:
             # timesteps_total
             num_env_steps_sampled: 1.2e+6

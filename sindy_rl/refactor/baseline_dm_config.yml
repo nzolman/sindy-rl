@@ -1,0 +1,31 @@
+exp_dir: tmp2
+
+drl:
+  class: PPO
+  config:
+    env: DMCEnvWrapper
+    env_config:
+      # config:
+      domain_name: "cartpole"
+      task_name: "swingup"
+      from_pixels: False
+      task_kwargs: 
+    framework: torch
+    evaluation_config:
+      domain_name: "cartpole"
+      task_name: "swingup"
+      from_pixels: False
+      task_kwargs: 
+    evaluation_interval: 1
+    evaluation_duration: 5
+
+ray_config:
+    run_config:
+        name: "test_cartpole_baseline_eval"
+        stop:
+            # timesteps_total
+            num_env_steps_sampled: 1.0e+7
+        log_to_file: True 
+    tune_config:
+        num_samples: 20 # number of sample trials to run
+    checkpoint_freq: 50

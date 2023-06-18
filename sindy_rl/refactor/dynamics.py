@@ -7,6 +7,7 @@ import os
 from scipy.integrate import solve_ivp
 
 from sindy_rl.refactor.sindy_utils import build_optimizer, build_feature_library
+from sindy_rl.refactor import dynamics_callbacks
 
 class BaseDynamicsModel:
     '''
@@ -30,6 +31,10 @@ class EnsembleSINDyDynamicsModel(BaseDynamicsModel):
         self.config = config or {}
         self.dt = self.config.get('dt', 1)
         self.discrete = self.config.get('discrete', True)
+        self.callbacks = self.config.get('callbacks', None)
+        
+        if self.callbacks is not None:
+            self.callbacks = getattr(dynamics_callbacks, self.callbacks)
         
         # init optimizer
         optimizer = self.config.get('optimizer')
@@ -224,13 +229,15 @@ class EnsembleSINDyDynamicsModel(BaseDynamicsModel):
         The one-step predictor (wrapper for pysindy simulator)
         '''
         if self.discrete:
-            return (self.simulate(x, np.array([u]), t =2))[-1]
+            update = (self.simulate(x, np.array([u]), t =2))[-1]
         else:
             update = solve_ivp(self._dyn_fn,
                                 y0 = x,
                                 t_span = [0, self.dt],
                                 args=(np.array([u]),)).y.T[-1]
-            return update
+        if self.callbacks is not None:    
+            update = self.callbacks(update)
+        return update
     def print(self):
         '''wrapper for pysindy print'''
         self.model.print()

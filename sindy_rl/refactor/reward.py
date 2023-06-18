@@ -1,8 +1,9 @@
 import numpy as np
 import pysindy as ps
 
-from sindy_rl.refactor.sindy_utils import build_optimizer, build_feature_library
 
+from sindy_rl.refactor.sindy_utils import build_optimizer, build_feature_library
+from sindy_rl.refactor import reward_fns
 
 class BaseRewardModel:
     '''
@@ -15,7 +16,24 @@ class BaseRewardModel:
     
     def fit(self, X, U, Y):
         raise NotImplementedError
+    
+    
+class FunctionalRewardModel(BaseRewardModel):
+    def __init__(self, config):
+        '''
+        Attributes:
+            rew_fn: function
+                signature: rew_fn(x, u, **kwargs)
+                returns scalar reward for 1-d arrays x,u
+        '''
+        self.rew_fn = getattr(reward_fns, config['name'])
+        self.rew_kwargs = config['kwargs']
 
+    def predict(self, x, u):
+        return self.rew_fn(x, u, **self.rew_kwargs)
+
+    def fit(self, X, U, Y):
+        return None
 
 class EnsembleSparseRewardModel(BaseRewardModel):
     '''

@@ -1,5 +1,6 @@
 **/tmp/
 notebooks/
+data/
 notebooks
 images/
 ray_results/

@@ -27,7 +27,11 @@ def rollout_env(env, policy, n_steps, n_steps_reset=np.inf, seed=None):
     '''
     returns lists of obs, acts, rews trajectories
     '''
-    obs_list = [safe_reset(env.reset(seed=seed))]
+    if seed is not None:    
+        obs_list = [safe_reset(env.reset(seed=seed))]
+    else:
+        obs_list = [safe_reset(env.reset())]
+
     act_list = []
     rew_list = []
     
@@ -122,7 +126,7 @@ class BaseSurrogateEnv(gym.Env):
         '''Use surrogate env for step updates'''
         self.use_real_env = False
 
-    def init_real_env(self, env=None, reset=True, seed=0):
+    def init_real_env(self, env=None, reset=True, **reset_kwargs):
         '''
         Initialize real environment (for computation purposes, may not always want to init)
         
@@ -131,8 +135,9 @@ class BaseSurrogateEnv(gym.Env):
                 the real environment with gym.evn-like API (step, reset, etc.)
             reset: (bool)
                 whether to reset the environment upon initialization
-            seed: (int)
-                the seed to reset the enviornment. Only used if `reset`==True
+            reset_kwargs:
+                seed: (int)
+                    the seed to reset the enviornment. Only used if `reset`==True
         '''
         if env:
             self.real_env = env
@@ -143,7 +148,7 @@ class BaseSurrogateEnv(gym.Env):
             self.real_env = self.real_env_class(self.real_env_config)
 
         if reset:
-            self.real_env.reset(seed=seed)
+            self.real_env.reset(**reset_kwargs)
         return self.real_env 
     
     def is_done(self):
@@ -165,11 +170,13 @@ class BaseSurrogateEnv(gym.Env):
         done = self.is_done()
         return self.obs, rew, done, {}
     
-    def reset(self, seed=0):
+    def reset(self, **reset_kwargs):
         '''Resets the environment'''
         self.n_episode_steps = 0
-        self.obs = safe_reset(self.real_env.reset(seed=seed))
+        self.obs = safe_reset(self.real_env.reset(**reset_kwargs))
         return self.obs
+    
+    # def update_models_(self, )
 
 class BaseEnsembleSurrogateEnv(BaseSurrogateEnv):
     '''Wrapper to initialize surrogate environment with Ensemble SINDy dynamics models'''

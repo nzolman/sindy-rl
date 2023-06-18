@@ -217,6 +217,7 @@ class DynaSINDy(BaseDynaSINDy):
         n_samples_off_pi = self.off_policy_buffer.total_samples()
         n_traj_on_pi = len(self.on_policy_buffer)
         n_traj_off_pi = len(self.off_policy_buffer)
+        total_samples = self.on_pi_buffer_config['collect']['n_steps'] * (self.n_dyn_updates - 1) + n_samples_off_pi
         buffer_metrics = {
             'n_dyn_updates': self.n_dyn_updates,
             'n_samples': n_samples_on_pi + n_samples_off_pi,
@@ -224,39 +225,7 @@ class DynaSINDy(BaseDynaSINDy):
             'n_sampels_off_pi': n_samples_off_pi,
             'n_traj': n_traj_on_pi  + n_traj_off_pi,
             'n_traj_on_pi': n_traj_on_pi,
-            'n_traj_off_pi': n_traj_off_pi
+            'n_traj_off_pi': n_traj_off_pi,
+            'n_total_real': total_samples
         }
         return buffer_metrics
-
-
-    # dyna_algo = DynaSINDy(dyna_config, logger=logger)
-    # dyna_algo.fit_dynamics()
-
-    # dyna_algo.dynamics_model.set_median_coef_()
-    # # dyna_algo.dynamics_model.print()
-    # print('')
-    # dyna_algo.fit_rew()
-    # dyna_algo.rew_model.set_median_coef_()
-    # # dyna_algo.rew_model.print()
-    
-    # env_config = dyna_config['drl']['config']['env_config']
-    # env_config.update({'dynamics_model_config': dyna_config['dynamics_model'],
-    #                     'rew_model_config': dyna_config['rew_model'],
-    #                     'real_env_config': dyna_config['real_env']['config'],
-    #                     'real_env_class': dyna_config['real_env']['class'],
-    #               })
-    
-    # fake_env = BaseEnsembleSurrogateEnv(env_config)
-    # # fake_env.dynamics_model.print()
-    # print()
-    # # fake_env.dynamics_model.set_ensemble_coefs_(dyna_algo.dynamics_model.get_coef_list())
-    # # fake_env.dynamics_model.print()
-    # fake_env.update_models_(dyna_algo.dynamics_model.get_coef_list(), 
-    #                         dyna_algo.rew_model.get_coef_list())
-    
-    # # fake_env.dynamics_model.print()
-    # fake_env.reset()
-    # for i in range(20):
-    #     print(fake_env.step(np.zeros(2)))
-    # # print(dyna_algo.off_policy_buffer.n_lens)
-    

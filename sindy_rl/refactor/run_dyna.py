@@ -72,7 +72,7 @@ if __name__ == '__main__':
     from sindy_rl.refactor.policy import RandomPolicy
     from sindy_rl import _parent_dir
     
-    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/dyna_config.yml'
+    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/dyna_config_cart.yml'
     with open(filename, 'r') as f:
         dyna_config = yaml.load(f, Loader=yaml.SafeLoader)
     
@@ -81,8 +81,10 @@ if __name__ == '__main__':
     logger = logging.getLogger('dyna-sindy')
     logger.setLevel(logging.INFO)
 
-    dyna_config['off_policy_pi'] = RandomPolicy(low=-1*np.ones(2), 
-                                                high = np.ones(2), 
+    # TO-DO: find a better place to automate this
+    n_control = dyna_config['dynamics_model']['feature_library']['kwargs']['n_control']
+    dyna_config['off_policy_pi'] = RandomPolicy(low=-1*np.ones(n_control), 
+                                                high = np.ones(n_control), 
                                                 seed=0)
     
     ip_head = os.environ.get('ip_head', None)

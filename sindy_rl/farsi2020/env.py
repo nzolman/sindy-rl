@@ -138,7 +138,7 @@ class Cartpole(DynEnv):
         config['dyn_fn'] = gt_cartpole
         config['dyn_params'] = (self.M, self.m, self.L, self.g )
         config['dt'] = 1.0 / 1000
-        config['n_state'] = 2
+        config['n_state'] = 4
         config['n_control'] = 1
         
         super().__init__(config)
