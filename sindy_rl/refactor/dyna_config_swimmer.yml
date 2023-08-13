@@ -23,7 +23,9 @@ drl:
         reset_on_bounds: True
         # noise: [0.10, 0.18, 0.18, 0.065, 0.20, 0.20, 0.41, 0.41]
       init_real_on_start: True
-      ensemble_mode: median
+      ensemble_modes: 
+        dyn: median
+        rew: median
       init_weights: True
       act_dim: 2
       obs_dim: 8
@@ -78,50 +80,54 @@ on_policy_buffer:
     n_steps_reset: 2000
 
 dynamics_model:
-  'dt': 1
-  'discrete': True 
-  'optimizer': 
-    'base_optimizer':
-      'name': 'STLSQ'
-      'kwargs': 
-        'alpha': 5.0e-1
-        'threshold': 2.0e-2
-    'ensemble':
-      'bagging': True
-      'library_ensemble': True
-      'n_models': 100
-  'feature_library': 
-    name: affine
-    kwargs:
-      poly_deg: 2
-      n_state: 8 
-      n_control: 2
-      poly_int: False
-      tensor: True
-    # name: PolynomialLibrary
-    # kwargs:
-    #   degree: 3
-    #   include_bias: False
-    #   include_interaction: False
+  class: EnsembleSINDyDynamicsModel
+  config:
+    'dt': 1
+    'discrete': True 
+    'optimizer': 
+      'base_optimizer':
+        'name': 'STLSQ'
+        'kwargs': 
+          'alpha': 5.0e-1
+          'threshold': 2.0e-2
+      'ensemble':
+        'bagging': True
+        'library_ensemble': True
+        'n_models': 100
+    'feature_library': 
+      name: affine
+      kwargs:
+        poly_deg: 2
+        n_state: 8 
+        n_control: 2
+        poly_int: False
+        tensor: True
+      # name: PolynomialLibrary
+      # kwargs:
+      #   degree: 3
+      #   include_bias: False
+      #   include_interaction: False
     
 rew_model:
-  'use_control': False
-  'optimizer': 
-    'base_optimizer':
-      'name': 'STLSQ'
-      'kwargs': 
-        'alpha': 1.0e-5
-        'threshold': 5.0e-2
-    'ensemble':
-      'bagging': True
-      'library_ensemble': True
-      'n_models': 100
-  'feature_library': 
-    name: PolynomialLibrary
-    kwargs:
-      degree: 2
-      include_bias: False
-      include_interaction: False
+  class: EnsembleSparseRewardModel
+  config:
+    'use_control': False
+    'optimizer': 
+      'base_optimizer':
+        'name': 'STLSQ'
+        'kwargs': 
+          'alpha': 1.0e-5
+          'threshold': 5.0e-2
+      'ensemble':
+        'bagging': True
+        'library_ensemble': True
+        'n_models': 100
+    'feature_library': 
+      name: PolynomialLibrary
+      kwargs:
+        degree: 2
+        include_bias: False
+        include_interaction: False
 
 ray_config:
     run_config:

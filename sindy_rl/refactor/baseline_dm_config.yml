@@ -3,12 +3,21 @@ exp_dir: tmp2
 drl:
   class: PPO
   config:
+    lr_schedule: [[0, 3.0e-4], [10000000, 3.0e-9]]
+    # rollout_fragment_length: 2048
+    # sgd_minibatch_size: 64
+    # num_sgd_iter: 10
+    lambda: 0.95
+    vf_loss_coeff: 0.5
+    vf_clip_param: 0.2
+    clip_param: 0.2
+    grad_clip: 0.5
     env: DMCEnvWrapper
     env_config:
-      # config:
       domain_name: "cartpole"
       task_name: "swingup"
       from_pixels: False
+      frame_skip: 1
       task_kwargs: 
     framework: torch
     evaluation_config:
@@ -21,7 +30,7 @@ drl:
 
 ray_config:
     run_config:
-        name: "test_cartpole_baseline_eval"
+        name: "test_cartpole_baseline_eval_fc=64_cleanRL_loss_params_long_checkpoints"
         stop:
             # timesteps_total
             num_env_steps_sampled: 1.0e+7

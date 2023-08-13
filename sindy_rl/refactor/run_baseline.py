@@ -27,7 +27,8 @@ if __name__ == '__main__':
     from sindy_rl.refactor.policy import RandomPolicy
     from sindy_rl import _parent_dir
     
-    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_config.yml'
+    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_dm_config.yml'
+    # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_config.yml'
     with open(filename, 'r') as f:
         config = yaml.load(f, Loader=yaml.SafeLoader)
 
@@ -42,8 +43,8 @@ if __name__ == '__main__':
     ray_config = config['ray_config']
     run_config=air.RunConfig(
         local_dir=LOCAL_DIR,
-        **ray_config['run_config']
-        # checkpoint_config=air.CheckpointConfig(checkpoint_frequency=1),
+        **ray_config['run_config'],
+        checkpoint_config=air.CheckpointConfig(checkpoint_frequency=ray_config['checkpoint_freq']),
     )
     
     
@@ -55,6 +56,7 @@ if __name__ == '__main__':
     drl_config = config['drl']['config']
     drl_default_config.update(drl_config)
     drl_default_config['env'] = getattr(registry, drl_default_config['env'])
+    drl_default_config['model']["fcnet_hiddens"] = [64, 64]
     
     tune.Tuner(
         config['drl']['class'],

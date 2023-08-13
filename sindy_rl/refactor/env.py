@@ -3,6 +3,7 @@ from gym.spaces.box import Box
 import numpy as np
 import pysindy as ps
 
+from sindy_rl.refactor import dynamics, reward
 from sindy_rl.refactor.dynamics import EnsembleSINDyDynamicsModel
 from sindy_rl.refactor.reward import EnsembleSparseRewardModel
 from sindy_rl.refactor import registry
@@ -82,6 +83,8 @@ class BaseSurrogateEnv(gym.Env):
         # self.surrogate_config = self.config['surrogate_config']
         self.dynamics_model_config = self.config['dynamics_model_config']
         self.rew_model_config = self.config['rew_model_config']
+        self._init_weights = self.config.get('init_weights', False)
+        
         self.use_real_env = False
         self.real_env = False
         self.obs = None
@@ -113,10 +116,31 @@ class BaseSurrogateEnv(gym.Env):
                                     )
         
     def _init_dynamics_model(self):
-        raise NotImplementedError
+        '''Initialize dynamics model'''
+        # TO DO: Make this more general!
+        dynamics_class = getattr(dynamics, self.dynamics_model_config['class'])
+        self.dynamics_model = dynamics_class(self.dynamics_model_config['config'])
+        # self.dynamics_model = EnsembleSINDyDynamicsModel(self.dynamics_model_config)
+        
+        # init weights
+        if self._init_weights: 
+            x_tmp = np.ones((10, self.obs_dim))
+            u_tmp = np.ones((10, self.act_dim))
+            self.dynamics_model.fit([x_tmp], [u_tmp])
 
     def _init_rew_model(self):
-        raise NotImplementedError
+        '''Initialize reward model'''
+        
+        rew_class = getattr(reward, self.rew_model_config['class'])
+        self.rew_model = rew_class(self.rew_model_config['config'])
+        
+        # self.rew_model = EnsembleSparseRewardModel(self.rew_model_config)
+        
+        if self._init_weights: 
+            x_tmp = np.ones((10, self.obs_dim))
+            u_tmp = np.ones((10, self.act_dim))
+            r_tmp = np.ones((10, 1))
+            self.rew_model.fit([x_tmp], U=[u_tmp], Y=[r_tmp])
 
     def switch_on_real_env_(self):
         '''Use real env for step updates'''
@@ -175,59 +199,53 @@ class BaseSurrogateEnv(gym.Env):
         self.n_episode_steps = 0
         self.obs = safe_reset(self.real_env.reset(**reset_kwargs))
         return self.obs
-    
-    # def update_models_(self, )
+
+
 
 class BaseEnsembleSurrogateEnv(BaseSurrogateEnv):
     '''Wrapper to initialize surrogate environment with Ensemble SINDy dynamics models'''
     def __init__(self, config):
         super().__init__(config)
         
-        self._init_weights = self.config.get('init_weights', False)
-        self.ensemble_mode = self.config.get('ensemble_mode', 'median')
+        self.ensemble_modes = self.config.get('ensemble_modes', {'dyn': 'median', 
+                                                                 'rew': 'median'})
         self.use_bounds = self.config.get('use_bounds', True)
         self._init_act()
         self._init_obs()
         
         self._init_dynamics_model()
         self._init_rew_model()
-        self.set_ensemble_mode_(mode=self.ensemble_mode)
+        self.set_ensemble_mode_(modes=self.ensemble_modes)
     
-    def set_ensemble_mode_(self, mode=None, valid=False):
+    def set_ensemble_mode_(self, modes=None, valid=False):
         '''Set the behavior of the ensemble model'''
+        self.ensemble_modes = modes
         
-        self.ensemble_mode = mode
-        assert mode in ['sample', 'mean', 'median'], f'Invalid dynamcis mode: {mode}'
-        if mode == 'sample':
-            self.dynamics_model.set_rand_coef_(valid=valid)
-            self.rew_model.set_rand_coef_(valid=valid)
-        elif mode == 'mean': 
-            self.dynamics_model.set_mean_coef_(valid=valid)
-            self.rew_model.set_mean_coef_(valid=valid)
-        elif mode == 'median':
-            self.dynamics_model.set_median_coef_(valid=valid)
-            self.rew_model.set_median_coef_(valid=valid)
+        models = {'dyn': self.dynamics_model, 'rew': self.rew_model}
+        mode_mapping = {'sample': 'set_rand_coef_', 
+                        'mean': 'set_mean_coef_',
+                        'median': 'set_median_coef_'}
+        
+        for model_name, mode in self.ensemble_modes.items():
+            assert mode in ['sample', 'mean', 'median', None], f'Invalid dynamcis mode: {mode}'
+            model = models[model_name]
+            
+            if mode is None:
+                # Do Nothing
+                continue
+            else:
+                # get he appropriate mapping and apply it
+                fn_ = getattr(model, mode_mapping[mode])
+                fn_(valid=valid)
 
-    def _init_dynamics_model(self):
-        '''Initialize dynamics model'''
-        # TO DO: Make this more general!
-        self.dynamics_model = EnsembleSINDyDynamicsModel(self.dynamics_model_config)
-        
-        # init weights
-        if self._init_weights: 
-            x_tmp = np.ones((10, self.obs_dim))
-            u_tmp = np.ones((10, self.act_dim))
-            self.dynamics_model.fit([x_tmp], [u_tmp])
-
-    def _init_rew_model(self):
-        '''Initialize reward model'''
-        self.rew_model = EnsembleSparseRewardModel(self.rew_model_config)
-        
-        if self._init_weights: 
-            x_tmp = np.ones((10, self.obs_dim))
-            u_tmp = np.ones((10, self.act_dim))
-            r_tmp = np.ones((10, 1))
-            self.rew_model.fit([x_tmp], U=[u_tmp], Y=[r_tmp])
+        # if mode == 'sample':
+        #     model.set_rand_coef_(valid=valid)
+        # elif mode == 'mean': 
+        #     model.set_mean_coef_(valid=valid)
+        # elif mode == 'median':
+        #     model.set_median_coef_(valid=valid)
+        # elif mode is None:
+        #     pass
   
     def update_models_(self, dynamics_weights=None, reward_weights=None):
         '''Wrapper for setting different model weights'''
@@ -235,7 +253,7 @@ class BaseEnsembleSurrogateEnv(BaseSurrogateEnv):
             self.dynamics_model.set_ensemble_coefs_(dynamics_weights)
         if reward_weights:
             self.rew_model.set_ensemble_coefs_(reward_weights)
-        self.set_ensemble_mode_(mode=self.ensemble_mode)
+        self.set_ensemble_mode_(modes=self.ensemble_modes)
     
     def is_done(self):
         done = (self.n_episode_steps >= self.max_episode_steps)
@@ -249,5 +267,5 @@ class BaseEnsembleSurrogateEnv(BaseSurrogateEnv):
     def reset(self, **kwargs):
         obs = super().reset(**kwargs)
         # resample if necessary
-        self.set_ensemble_mode_(mode=self.ensemble_mode)
+        self.set_ensemble_mode_(modes=self.ensemble_modes)
         return obs

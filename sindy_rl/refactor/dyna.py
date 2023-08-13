@@ -6,7 +6,7 @@ import numpy as np
 from ray.rllib.algorithms.registry import get_algorithm_class
 from gym.wrappers import StepAPICompatibility
 
-from sindy_rl.refactor import registry
+from sindy_rl.refactor import registry, dynamics, reward
 from sindy_rl.refactor.policy import RLlibPolicyWrapper
 from sindy_rl.refactor.dynamics import EnsembleSINDyDynamicsModel
 from sindy_rl.refactor.reward import EnsembleSparseRewardModel
@@ -96,7 +96,10 @@ class DynaSINDy(BaseDynaSINDy):
         
         self.drl_config['env'] = BaseEnsembleSurrogateEnv 
         drl_default_config.update(self.drl_config)
-
+        
+        # TO-DO: figure out a better place to put this
+        drl_default_config['model']["fcnet_hiddens"] = [64, 64]
+        
         self.drl_algo = drl_class(config=drl_default_config)
         self.on_policy_pi = RLlibPolicyWrapper(self.drl_algo)
         self.logger.info('...DRL algo setup.')
@@ -123,11 +126,15 @@ class DynaSINDy(BaseDynaSINDy):
         
     def _init_dynamics_model(self):
         '''Initialize dynamics model'''
-        self.dynamics_model = EnsembleSINDyDynamicsModel(self.dyn_config)
+        dynamics_class = getattr(dynamics, self.dyn_config['class'])
+        self.dynamics_model = dynamics_class(self.dyn_config['config'])
+        # self.dynamics_model = EnsembleSINDyDynamicsModel(self.dyn_config)
     
     def _init_rew_model(self):
         '''Initialize reward model'''
-        self.rew_model = EnsembleSparseRewardModel(self.rew_config)
+        rew_class = getattr(reward, self.rew_config['class'])
+        self.rew_model = rew_class(self.rew_config['config'])
+        # self.rew_model = EnsembleSparseRewardModel(self.rew_config)
         
     def _init_data_buffers(self):
         '''Initialize the data buffers'''
@@ -208,7 +215,11 @@ class DynaSINDy(BaseDynaSINDy):
         '''Updating surrogate model'''
         self.logger.info('Updating worker weights')
         dyn_weights = self.dynamics_model.get_coef_list()
-        rew_weights = self.rew_model.get_coef_list()
+        
+        rew_weights = None
+        if self.rew_model.can_update:
+            rew_weights = self.rew_model.get_coef_list()
+            
         self.drl_algo.workers.foreach_worker(update_dyn_and_rew_models(dyn_weights, rew_weights))
         self.n_dyn_updates += 1
 

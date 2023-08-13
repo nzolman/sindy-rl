@@ -82,7 +82,7 @@ if __name__ == '__main__':
     logger.setLevel(logging.INFO)
 
     # TO-DO: find a better place to automate this
-    n_control = dyna_config['dynamics_model']['feature_library']['kwargs']['n_control']
+    n_control = dyna_config['dynamics_model']['config']['feature_library']['kwargs']['n_control']
     dyna_config['off_policy_pi'] = RandomPolicy(low=-1*np.ones(n_control), 
                                                 high = np.ones(n_control), 
                                                 seed=0)

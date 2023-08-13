@@ -27,7 +27,8 @@ class FunctionalRewardModel(BaseRewardModel):
                 returns scalar reward for 1-d arrays x,u
         '''
         self.rew_fn = getattr(reward_fns, config['name'])
-        self.rew_kwargs = config['kwargs']
+        self.rew_kwargs = config.get('kwargs', {})
+        self.can_update = False
 
     def predict(self, x, u):
         return self.rew_fn(x, u, **self.rew_kwargs)
@@ -45,6 +46,8 @@ class EnsembleSparseRewardModel(BaseRewardModel):
     R_i = Theta(X,U) @ Xi_i
     '''
     def __init__(self, config):
+        self.can_update = True
+        
         self.config = config
         self.use_control = config.get('use_control', False)
         # self.n_control = config['n_control']
