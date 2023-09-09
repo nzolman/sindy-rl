@@ -98,7 +98,7 @@ class DynaSINDy(BaseDynaSINDy):
         drl_default_config.update(self.drl_config)
         
         # TO-DO: figure out a better place to put this
-        drl_default_config['model']["fcnet_hiddens"] = [64, 64]
+        drl_default_config['model']["fcnet_hiddens"] = self.config.get('fcnet_hiddens', [64, 64])
         
         self.drl_algo = drl_class(config=drl_default_config)
         self.on_policy_pi = RLlibPolicyWrapper(self.drl_algo)

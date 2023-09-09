@@ -51,3 +51,85 @@ class RandomPolicy(BasePolicy):
     def set_magnitude_(self, mag):
         self.magnitude = mag
 
+
+
+class SparseEnsemblePolicy(BasePolicy):
+    def __init__(self, optimizer, feature_library, min_bounds = None, max_bounds = None):
+
+        self.min_bounds = min_bounds
+        self.max_bounds = max_bounds
+        self.optimizer = optimizer
+        self.feature_library = feature_library
+        
+    def compute_action(self, obs):
+        ThetaX = self.feature_library.transform(obs)
+        u = self.optimizer.coef_ @ ThetaX
+        
+        if self.min_bounds is not None:
+            u = np.clip(u, self.min_bounds, self.max_bounds)
+        return np.array(u, dtype=np.float32)
+        
+    def _init_features(self, X_concat):
+        X = self.feature_library.reshape_samples_to_spatial_grid(X_concat)
+        self.ThetaX = self.feature_library.fit_transform(X)
+        return self.ThetaX
+    
+    def fit(self, data_trajs, action_trajs):
+        X_concat = np.concatenate(data_trajs)
+        Y_concat = np.concatenate(action_trajs)
+        ThetaX = self._init_features(X_concat)
+        self.optimizer.fit(ThetaX, Y_concat)
+        return self.optimizer.coef_list
+    
+    def get_coef_list(self):
+        ''''
+        Get list of model coefficients.
+        
+        (Wrapper for pysindy optimizer `coef_list` attribute.)
+        '''
+        return self.optimizer.coef_list
+    
+    
+    def set_mean_coef_(self, valid=False):
+        '''
+        Set the model coefficients to be the ensemble mean.
+        
+        Inputs:
+            `valid': (bool) whether to only perform this on validated models.
+        Outputs: 
+            `coef_`: the ensemble mean coefficients
+        '''
+        coef_list = np.array(self.get_coef_list())
+        if valid:
+            coef_list = coef_list[self.safe_idx]
+        self.optimizer.coef_ = np.mean(coef_list, axis=0)
+        return self.optimizer.coef_
+
+    def set_median_coef_(self, valid=False):
+        '''
+        Set the model coefficients to be the ensemble median.
+        
+        Inputs:
+            `valid': (bool) whether to only perform this on validated models.
+        Outputs: 
+            `coef_`: the ensemble median coefficients
+        '''
+        coef_list = np.array(self.get_coef_list())
+        if valid:
+            coef_list = coef_list[self.safe_idx]
+        self.optimizer.coef_ = np.median(coef_list, axis=0)
+        
+        return self.optimizer.coef_
+        
+    def set_idx_coef_(self, idx):
+        '''
+        Set the model coefficients to be the `idx`-th ensemble coefficient
+        
+        Inputs:
+            `valid': (bool) whether to only perform this on validated models.
+        Outputs: 
+            `coef_`: the ensemble `idx`-th ensemble coefficient
+        '''
+        self.optimizer.coef_ = self.optimizer.coef_list[idx]
+        return self.optimizer.coef_
+        
