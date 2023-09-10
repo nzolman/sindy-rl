@@ -1,15 +1,13 @@
 import logging
 import os
 import pickle
-import pysindy as ps
 import numpy as np
-from ray.rllib.algorithms.registry import get_algorithm_class
+
+from ray.rllib.algorithms.registry import ALGORITHMS as rllib_algos
 from gym.wrappers import StepAPICompatibility
 
 from sindy_rl.refactor import registry, dynamics, reward
 from sindy_rl.refactor.policy import RLlibPolicyWrapper
-from sindy_rl.refactor.dynamics import EnsembleSINDyDynamicsModel
-from sindy_rl.refactor.reward import EnsembleSparseRewardModel
 from sindy_rl.refactor.traj_buffer import MaxSamplesBuffer
 from sindy_rl.refactor.env import rollout_env, BaseEnsembleSurrogateEnv
 from sindy_rl.refactor.ray_utils import update_dyn_and_rew_models
@@ -81,26 +79,36 @@ class DynaSINDy(BaseDynaSINDy):
     def _init_drl(self):
         '''Initialize DRL model and on-policy-pi'''
         self.logger.info('Setting up DRL algo...')
-        drl_class = self.config['drl']['class']
+        drl_class_name = self.config['drl']['class']
         self.drl_config = self.config['drl']['config']
-        drl_class, drl_default_config = get_algorithm_class(drl_class, 
-                                                            return_config=True)
+
+        drl_class, drl_config_obj = rllib_algos.get(drl_class_name)()
 
         # ensure the surrogate env has the same dynamics/reward models.
-        self.drl_config['env_config'].update({
-                            'dynamics_model_config': self.dyn_config,
-                            'rew_model_config': self.rew_config,
-                            'real_env_config': self.config['real_env']['config'],
-                            'real_env_class': self.config['real_env']['class'],
-                        })
+        self.drl_config['environment']['env_config'].update({
+                                                            'dynamics_model_config': self.dyn_config,
+                                                            'rew_model_config': self.rew_config,
+                                                            'real_env_config': self.config['real_env']['config'],
+                                                            'real_env_class': self.config['real_env']['class'],
+                                                        })
+        self.drl_config['environment']['env'] = BaseEnsembleSurrogateEnv 
         
-        self.drl_config['env'] = BaseEnsembleSurrogateEnv 
-        drl_default_config.update(self.drl_config)
+        # prep the config object
+        drl_config_obj = (drl_config_obj
+                            .environment(**self.drl_config['environment'])
+                            .training(**self.drl_config['training'])
+                            .evaluation(**self.drl_config['evaluation'])
+                        )
         
-        # TO-DO: figure out a better place to put this
-        drl_default_config['model']["fcnet_hiddens"] = self.config.get('fcnet_hiddens', [64, 64])
+        # configure model architecture
+        # TO-DO: figure out a better spot for this
+        model_config = drl_config_obj.model
+        fcnet_hiddens = self.config.get('fcnet_hiddens', [64, 64])
+        model_config.update({'fcnet_hiddens': fcnet_hiddens})
+        drl_config_obj.training(model=model_config)
         
-        self.drl_algo = drl_class(config=drl_default_config)
+        
+        self.drl_algo = drl_config_obj.build()
         self.on_policy_pi = RLlibPolicyWrapper(self.drl_algo)
         self.logger.info('...DRL algo setup.')
         
@@ -113,6 +121,7 @@ class DynaSINDy(BaseDynaSINDy):
         else:
             self.real_env = self.config['real_env']
         
+        # if self.real_env.use_old_api:
         self.real_env = StepAPICompatibility(self.real_env, output_truncation_bool=False)
         self.real_env.reset()
         # TO-DO: initialize with seed?

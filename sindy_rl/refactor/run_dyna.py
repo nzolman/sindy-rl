@@ -1,18 +1,8 @@
 import logging
 import os
-import pickle
-import pysindy as ps
 import numpy as np
-from ray.rllib.algorithms.registry import get_algorithm_class
-from gym.wrappers import StepAPICompatibility
+from ray.rllib.algorithms.registry import ALGORITHMS as rllib_algos
 
-from sindy_rl.refactor import registry
-from sindy_rl.refactor.policy import RLlibPolicyWrapper
-from sindy_rl.refactor.dynamics import EnsembleSINDyDynamicsModel
-from sindy_rl.refactor.reward import EnsembleSparseRewardModel
-from sindy_rl.refactor.traj_buffer import MaxSamplesBuffer
-from sindy_rl.refactor.env import rollout_env, BaseEnsembleSurrogateEnv
-from sindy_rl.refactor.ray_utils import update_dyn_and_rew_models
 from sindy_rl.refactor.dyna import DynaSINDy
 
 
@@ -24,6 +14,7 @@ def dyna_sindy(config):
     
     # data collected (or loaded) upon initialization
     dyna = DynaSINDy(dyna_config)
+
     # setup the dynamics, reward, DRL algo push weights to surrogate
     # on remote workers
     dyna.fit_dynamics()
@@ -57,7 +48,6 @@ def dyna_sindy(config):
         train_results['dyn_collect'] = collect_dict
         
         tune.report(**train_results)
-        
 
 
 if __name__ == '__main__': 
@@ -65,18 +55,19 @@ if __name__ == '__main__':
     import logging
     import ray
     from ray import tune, air
-    from gym.wrappers import StepAPICompatibility
     from pprint import pprint
     
-    from sindy_rl.refactor.swimmer import SwimmerWithBounds
     from sindy_rl.refactor.policy import RandomPolicy
     from sindy_rl import _parent_dir
     
-    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/dyna_config_cart.yml'
+    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/dyna_config_cart_test.yml'
     with open(filename, 'r') as f:
         dyna_config = yaml.load(f, Loader=yaml.SafeLoader)
+    LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results',dyna_config['exp_dir'])
     
     pprint(dyna_config)
+    
+    # Setup logger
     logging.basicConfig()
     logger = logging.getLogger('dyna-sindy')
     logger.setLevel(logging.INFO)
@@ -91,9 +82,6 @@ if __name__ == '__main__':
     ray.init(address=ip_head)
     print(ray.nodes())
     
-    
-    LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results',dyna_config['exp_dir'])
-    
     ray_config = dyna_config['ray_config']
     run_config=air.RunConfig(
         local_dir=LOCAL_DIR,
@@ -104,8 +92,7 @@ if __name__ == '__main__':
     
     tune_config=tune.TuneConfig(**dyna_config['ray_config']['tune_config'])
     
-    drl_class, drl_default_config = get_algorithm_class(dyna_config['drl']['class'], 
-                                                        return_config=True)
+    drl_class, drl_default_config = rllib_algos.get(dyna_config['drl']['class'])()
     
     tune.Tuner(
         tune.with_resources(dyna_sindy, 
