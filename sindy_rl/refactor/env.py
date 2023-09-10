@@ -1,5 +1,5 @@
-import gym
-from gym.spaces.box import Box
+import gymnasium
+from gymnasium.spaces.box import Box
 import numpy as np
 import pysindy as ps
 
@@ -14,6 +14,15 @@ def safe_reset(res):
     '''
     if isinstance(res[-1], dict):
         return res[0]
+    else:
+        return res
+    
+def safe_step(res):
+    '''
+    A ''safe'' wrapper for dealing with OpenAI gym's refactor.
+    '''
+    if len(res)==5:
+        return res[0], res[1], res[2] or res[3], res[4]
     else:
         return res
     
@@ -42,7 +51,7 @@ def rollout_env(env, policy, n_steps, n_steps_reset=np.inf, seed=None):
 
     for i in range(n_steps):
         action = policy.compute_action(obs_list[-1])
-        obs, rew, done, info = env.step(action)
+        obs, rew, done, info = safe_step(env.step(action))
         act_list.append(action)
         obs_list.append(obs)
         rew_list.append(rew)
@@ -65,7 +74,7 @@ def rollout_env(env, policy, n_steps, n_steps_reset=np.inf, seed=None):
     return trajs_obs, trajs_acts, trajs_rews
 
 
-class BaseSurrogateEnv(gym.Env):
+class BaseSurrogateEnv(gymnasium.Env):
     '''
     NOTE: original intent of allowing real-env is to be able to 
     use callbacks and/or intialize an evaluation environment
@@ -75,6 +84,7 @@ class BaseSurrogateEnv(gym.Env):
     '''
     def __init__(self, config):
         self.config = config
+        self.use_old_api = self.config.get('use_old_api', False)
         self.max_episode_steps = self.config.get('max_episode_steps', 1000)
         self.n_episode_steps = 0
         
@@ -175,30 +185,59 @@ class BaseSurrogateEnv(gym.Env):
             self.real_env.reset(**reset_kwargs)
         return self.real_env 
     
-    def is_done(self):
+    def is_trunc(self):
+        '''Computes whether the episode has truncated'''
+        raise NotImplementedError
+    
+    def is_term(self):
         '''Computes whether the episode has terminated'''
         raise NotImplementedError
+    
+    def _real_step(self, action):
+        '''TO-DO: Clean this up'''
+        res = self.real_env.step(action)
+        if self.use_old_api:
+            return safe_step(res)
+        else:
+            
+            obs = res[0]
+            rew = res[1]
+            term = res[2]
+            info = res[-1]
+            return obs, rew, self.is_term(), self.is_trunc(), info 
     
     def step(self, action):
         '''Steps through the real or surrogate environment'''
         self.action = action
+        self.n_episode_steps +=1
+        
         if self.use_real_env:
-            return self.real_env.step(self.action)
+            return self._real_step(self.action)
         
         
         next_obs = self.dynamics_model.predict(self.obs, self.action)
         rew = self.rew_model.predict(next_obs, self.action)
         
-        self.n_episode_steps +=1
         self.obs = next_obs
-        done = self.is_done()
-        return self.obs, rew, done, {}
+        info = {}
+        
+        if self.use_old_api:
+            done = self.is_trunc() or self.is_term()
+            return self.obs, rew, done, info
+        else:
+            return self.obs, rew, self.is_term(), self.is_trunc(), info
+
     
     def reset(self, **reset_kwargs):
         '''Resets the environment'''
         self.n_episode_steps = 0
         self.obs = safe_reset(self.real_env.reset(**reset_kwargs))
-        return self.obs
+        
+        info = {}
+        if self.use_old_api:
+            return self.obs
+        else:
+            return self.obs, info
 
 
 
@@ -238,14 +277,6 @@ class BaseEnsembleSurrogateEnv(BaseSurrogateEnv):
                 fn_ = getattr(model, mode_mapping[mode])
                 fn_(valid=valid)
 
-        # if mode == 'sample':
-        #     model.set_rand_coef_(valid=valid)
-        # elif mode == 'mean': 
-        #     model.set_mean_coef_(valid=valid)
-        # elif mode == 'median':
-        #     model.set_median_coef_(valid=valid)
-        # elif mode is None:
-        #     pass
   
     def update_models_(self, dynamics_weights=None, reward_weights=None):
         '''Wrapper for setting different model weights'''
@@ -255,14 +286,18 @@ class BaseEnsembleSurrogateEnv(BaseSurrogateEnv):
             self.rew_model.set_ensemble_coefs_(reward_weights)
         self.set_ensemble_mode_(modes=self.ensemble_modes)
     
-    def is_done(self):
-        done = (self.n_episode_steps >= self.max_episode_steps)
+    
+    def is_trunc(self):
+        trunc = (self.n_episode_steps >= self.max_episode_steps)
+        return trunc
+    
+    def is_term(self):
+        term = False
         if self.use_bounds:
             lower_bounds_done = np.any(self.obs <= self.obs_bounds[0])
             upper_bounds_done = np.any(self.obs >= self.obs_bounds[1])
-            done = done or lower_bounds_done or upper_bounds_done
-        
-        return done
+            term = lower_bounds_done or upper_bounds_done
+        return term
         
     def reset(self, **kwargs):
         obs = super().reset(**kwargs)
