@@ -2,7 +2,9 @@ import logging
 import os
 import pickle
 import numpy as np
+import time
 
+from ray.rllib.algorithms.algorithm import Algorithm
 from ray.rllib.algorithms.registry import ALGORITHMS as rllib_algos
 from gym.wrappers import StepAPICompatibility
 
@@ -53,6 +55,9 @@ class BaseDynaSINDy:
         raise NotImplementedError
     
     def save_checkpoint(self):
+        raise NotImplementedError
+    
+    def load_checkpoint(self, air_checkpoint):
         raise NotImplementedError
     
     def update_surrogate(self):
@@ -201,10 +206,10 @@ class DynaSINDy(BaseDynaSINDy):
     def save_checkpoint(self, ckpt_num, save_dir):
         # setup directories
         # TO-DO: ensure this ckpt_num is the right number/format.
-        # NOTE: this structure seems to have changed in newer versions of RLlib.
-        # (e.g. ray==2.5.0)
+        # TO-DO: probably good idea to save off-pi data?
         
         ckpt_dir = os.path.join(save_dir, f'checkpoint_{ckpt_num+1:06}')
+        
         dyn_path = os.path.join(ckpt_dir, 'dyn_model.pkl')
         rew_path = os.path.join(ckpt_dir, 'rew_model.pkl')
         data_path = os.path.join(ckpt_dir,'on-pi_data.pkl')
@@ -218,7 +223,27 @@ class DynaSINDy(BaseDynaSINDy):
             pickle.dump(self.rew_model, f)
             
         self.on_policy_buffer.save_data(data_path)
-        return save_dir
+        return checkpoint
+    
+    def load_checkpoint(self, ckpt_dir):
+        '''
+        Restore dyna algorithm from saved checkpoint
+        '''
+        self.drl_algo.restore(ckpt_dir)
+        
+        # rew_path = os.path.join(ckpt_dir, 'rew_model.pkl')
+        # data_path = os.path.join(ckpt_dir,'on-pi_data.pkl')
+        # dyn_path = os.path.join(ckpt_dir, 'dyn_model.pkl')
+        
+        # with open(dyn_path, 'rb') as f:
+        #     self.dynamics_model= pickle.load( f)
+            
+        # with open(rew_path, 'rb') as f:
+        #     self.rew_model = pickle.load(f)
+            
+        # self.update_surrogate()
+        
+        # self.on_policy_buffer.load_data(data_path, clean=True)
     
     def update_surrogate(self):
         '''Updating surrogate model'''
