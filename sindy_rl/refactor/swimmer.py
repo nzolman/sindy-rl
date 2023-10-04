@@ -1,4 +1,4 @@
-from gym.envs.mujoco.swimmer_v4 import SwimmerEnv
+from gymnasium.envs.mujoco.swimmer_v4 import SwimmerEnv
 import numpy as np
 
 
@@ -28,6 +28,8 @@ class SwimmerWithBounds(SwimmerEnv):
         env_kwargs = env_config.get('env_kwargs', {})
         super().__init__(**env_kwargs)
         
+        # TO-DO: Deprecate old_api
+        self.old_api = env_config.get('use_old_api', False)
         self.noise = env_config.get('noise', None) or np.zeros(8)
         self.noise = np.array(self.noise)
         self.max_episode_steps = env_config.get('max_episode_steps', 1000)
@@ -39,32 +41,53 @@ class SwimmerWithBounds(SwimmerEnv):
         self.n_episode_steps = 0
         
     def get_done(self, state):
-        done = bool(
-            self.n_episode_steps >= self.max_episode_steps
-        )
+        trunc = self.get_trunc()
         
+        term = self.get_term(self, state)
+        return trunc or term
+    
+    def get_trunc(self):
+        trunc = bool(self.n_episode_steps >= self.max_episode_steps)
+        return trunc
+    
+    def get_term(self, state):
         if self.reset_on_bounds:
             lower_bounds = np.any(state <= _DEFAULT_ENV_BOUNDS.T[0])
             upper_bounds = np.any(state >= _DEFAULT_ENV_BOUNDS.T[1])
             out_of_bounds = lower_bounds or upper_bounds
-            done = done or out_of_bounds
-        return done
+            return out_of_bounds
+        else:
+            return False
+        
     
     def step(self, action):
         '''
         To do: Figure out when we should be compliant with new vs. old gym API
         '''
         observation, reward, terminated, truncated, info = super().step(action)
-        done = self.get_done(observation)
+        # done = self.get_done(observation)
         self.n_episode_steps +=1
         
         observation += self.noise * np.random.normal(loc=0, scale=1, size=(8,))
-        return observation, reward, (terminated or done), truncated, info
+        
+        if self.old_api: 
+            done = self.get_done(observation)
+            return observation, reward, (terminated or done), truncated, info
+
+        terminated = self.get_term(observation)
+        truncated = self.get_trunc()
+        return observation, reward, terminated, truncated, info
     
     def reset(self, **kwargs):
         # TO-DO: add noise on initial state
         self.n_episode_steps = 0
-        return super().reset(**kwargs)
+        
+        res = super().reset(**kwargs)
+        
+        if self.old_api: 
+            return res[0]
+        else: 
+            return res
 
         
 class SwimmerWithBoundsClassic(SwimmerWithBounds):

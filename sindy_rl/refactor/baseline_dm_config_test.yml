@@ -1,0 +1,46 @@
+
+exp_dir: test
+fcnet_hiddens: [64, 64]
+use_pbt: True
+
+drl:
+  class: PPO
+  config:
+    training:
+      # lr_schedule: [[0, 3.0e-4], [10000000, 3.0e-9]]
+      lr: 3.0e-4
+      lambda_: 0.95
+      vf_loss_coeff: 0.5
+      vf_clip_param: 0.2
+      clip_param: 0.2
+      grad_clip: 0.5
+    environment:
+      env: DMCEnvWrapper
+      env_config:
+        domain_name: "cartpole"
+        task_name: "swingup"
+        from_pixels: False
+        frame_skip: 1
+        task_kwargs: 
+    framework: torch
+    evaluation:
+      evaluation_config:
+        domain_name: "cartpole"
+        task_name: "swingup"
+        from_pixels: False
+        task_kwargs: 
+      evaluation_interval: 10
+      evaluation_duration: 5
+      evaluation_duration_unit: "episodes"
+      always_attach_evaluation_results: True
+
+ray_config:
+    run_config:
+        name: "test_cartpole_baseline_pbt"
+        stop:
+            # timesteps_total
+            num_env_steps_sampled: 2.0e+6
+        log_to_file: True 
+    tune_config:
+        num_samples: 20 # number of sample trials to run
+    checkpoint_freq: 25

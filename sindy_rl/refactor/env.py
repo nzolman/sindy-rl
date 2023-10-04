@@ -2,6 +2,7 @@ import gymnasium
 from gymnasium.spaces.box import Box
 import numpy as np
 import pysindy as ps
+from tqdm import tqdm 
 
 from sindy_rl.refactor import dynamics, reward
 from sindy_rl.refactor.dynamics import EnsembleSINDyDynamicsModel
@@ -33,7 +34,7 @@ def replace_with_inf(arr, neg):
     return np.nan_to_num(arr, nan=replace_with)
 
 
-def rollout_env(env, policy, n_steps, n_steps_reset=np.inf, seed=None):
+def rollout_env(env, policy, n_steps, n_steps_reset=np.inf, seed=None, verbose = False, env_callback = None):
     '''
     returns lists of obs, acts, rews trajectories
     '''
@@ -49,7 +50,7 @@ def rollout_env(env, policy, n_steps, n_steps_reset=np.inf, seed=None):
     trajs_acts = []
     trajs_rews = []
 
-    for i in range(n_steps):
+    for i in tqdm(range(n_steps), disable=not verbose):
         action = policy.compute_action(obs_list[-1])
         obs, rew, done, info = safe_step(env.step(action))
         act_list.append(action)
@@ -64,7 +65,10 @@ def rollout_env(env, policy, n_steps, n_steps_reset=np.inf, seed=None):
 
             obs_list = [safe_reset(env.reset())]
             act_list = []
-            rew_list = [] 
+            rew_list = []
+        
+        if env_callback:
+            env_callback(i, env)
             
     if len(act_list) != 0:
         obs_list.pop(-1)
@@ -88,12 +92,20 @@ class BaseSurrogateEnv(gymnasium.Env):
         self.max_episode_steps = self.config.get('max_episode_steps', 1000)
         self.n_episode_steps = 0
         
+        
+        
         self.real_env_class = self.config.get('real_env_class', None)
         self.real_env_config = self.config.get('real_env_config', {})
         # self.surrogate_config = self.config['surrogate_config']
         self.dynamics_model_config = self.config['dynamics_model_config']
         self.rew_model_config = self.config['rew_model_config']
         self._init_weights = self.config.get('init_weights', False)
+        
+        # whether to reset the surrogate environment by sampling a buffer
+        # of previously collected data. Usually off-policy. The intention
+        # is to make resetting go very fast.
+        self.reset_from_buffer = self.config.get('reset_from_buffer', False)
+        self.buffer_dict = self.config.get('buffer_dict', {})
         
         self.use_real_env = False
         self.real_env = False
@@ -231,7 +243,14 @@ class BaseSurrogateEnv(gymnasium.Env):
     def reset(self, **reset_kwargs):
         '''Resets the environment'''
         self.n_episode_steps = 0
-        self.obs = safe_reset(self.real_env.reset(**reset_kwargs))
+        
+        if not self.reset_from_buffer:
+            self.obs = safe_reset(self.real_env.reset(**reset_kwargs))
+        
+        else:
+            buffer_obs = np.concatenate(self.buffer_dict['x'])
+            buffer_idx = np.random.choice(len(buffer_obs))
+            self.obs = buffer_obs[buffer_idx]
         
         info = {}
         if self.use_old_api:

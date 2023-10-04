@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings('ignore')
+
 import os
 import numpy as np
 import random
@@ -15,7 +18,7 @@ if __name__ == '__main__':
     
     from sindy_rl import _parent_dir
     
-    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_dm_config_test.yml'
+    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_swimmer_config_test.yml'
     # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_config.yml'
     with open(filename, 'r') as f:
         config = yaml.load(f, Loader=yaml.SafeLoader)
@@ -23,40 +26,40 @@ if __name__ == '__main__':
     LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results', config['exp_dir'])
     
     ip_head = os.environ.get('ip_head', None)
-    ray.init(address=ip_head)
+    ray.init(address=ip_head,
+             logging_level=logging.ERROR)
     print(ray.nodes())
     
-    pbt = PopulationBasedTraining(
-        time_attr="training_iteration",
-        perturbation_interval=50,
-        resample_probability=0.25,
-        quantile_fraction=0.25,
-        # synch=True,
-        # Specifies the mutations of these hyperparams
-        hyperparam_mutations={
-        #     "drl/config/training/lambda_": lambda: random.uniform(0.9, 1.0),
-        #     "drl/config/training/clip_param": lambda: random.uniform(0.01, 0.5),
-            # "lambda_": lambda: random.uniform(0.9, 1.0),
-            # "clip_param": lambda: random.uniform(0.01, 0.5),
-            "lr": tune.loguniform(1e-6, 1e-3),
-            # "num_sgd_iter": lambda: random.randint(1, 30),
-            # "sgd_minibatch_size": lambda: random.randint(128, 16384),
-            # "train_batch_size": lambda: random.randint(2000, 160000),
-        },
-        # custom_explore_fn=explore,
-    )
+    def explore(config):
+        config['lambda_'] = np.clip(config['lambda_'], 0, 1)
+        config['gamma'] = np.clip(config['gamma'], 0, 1)
+        return config
+    
+    pbt_sched = None
+    if config.get('use_pbt', False):
+        pbt_config = config['pbt_config']
+        hyper_mut = {}
+        for key, val in pbt_config['hyperparam_mutations'].items():
+            search_class = getattr(tune, val['search_class'])
+            hyper_mut[key] = search_class(*val['search_space'])
+        
+        pbt_config['hyperparam_mutations'] = hyper_mut
+            
+        pbt_sched = PopulationBasedTraining(
+                        **pbt_config,
+                        custom_explore_fn=explore
+                    )
     
     ray_config = config['ray_config']
     run_config=air.RunConfig(
         local_dir=LOCAL_DIR,
         **ray_config['run_config'],
-        checkpoint_config=air.CheckpointConfig(checkpoint_frequency=ray_config['checkpoint_freq']),
+        checkpoint_config=air.CheckpointConfig(
+            checkpoint_frequency=ray_config['checkpoint_freq']),
     )
     
     tune_config=tune.TuneConfig(**config['ray_config']['tune_config'],
-                                scheduler=pbt,
-                                metric="episode_reward_mean",
-                                mode="max",
+                                scheduler=pbt_sched,
                                 )
     
     drl_class, drl_default_config = rllib_algos.get(config['drl']['class'])()
@@ -79,7 +82,6 @@ if __name__ == '__main__':
         param_space=drl_default_config, # this is what is passed to the experiment
         run_config=run_config,
         tune_config=tune_config,
-
     )
     results = tuner.fit()
 

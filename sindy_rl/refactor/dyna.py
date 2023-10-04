@@ -6,7 +6,7 @@ import time
 
 from ray.rllib.algorithms.algorithm import Algorithm
 from ray.rllib.algorithms.registry import ALGORITHMS as rllib_algos
-from gym.wrappers import StepAPICompatibility
+from gymnasium.wrappers import StepAPICompatibility
 
 from sindy_rl.refactor import registry, dynamics, reward
 from sindy_rl.refactor.policy import RLlibPolicyWrapper
@@ -71,7 +71,12 @@ class DynaSINDy(BaseDynaSINDy):
         self.on_pi_buffer_config = config.get('on_policy_buffer')
         self.dyn_config = self.config['dynamics_model']
         self.rew_config = self.config['rew_model']
+        self.drl_config = self.config['drl']['config']
         self.n_dyn_updates = 0
+        
+        # whether to provide the buffer to the surrogate environment for
+        # resetting
+        self.reset_from_buffer = config['drl']['config']['environment']['env_config'].get('reset_from_buffer', False)
         
         self._init_real_env()
         self._init_off_policy()
@@ -85,7 +90,6 @@ class DynaSINDy(BaseDynaSINDy):
         '''Initialize DRL model and on-policy-pi'''
         self.logger.info('Setting up DRL algo...')
         drl_class_name = self.config['drl']['class']
-        self.drl_config = self.config['drl']['config']
 
         drl_class, drl_config_obj = rllib_algos.get(drl_class_name)()
 
@@ -101,8 +105,11 @@ class DynaSINDy(BaseDynaSINDy):
         # prep the config object
         drl_config_obj = (drl_config_obj
                             .environment(**self.drl_config['environment'])
-                            .training(**self.drl_config['training'])
+                            .training(**self.drl_config['training'],
+                                      _enable_learner_api=False)
+                            
                             .evaluation(**self.drl_config['evaluation'])
+                            .rl_module(_enable_rl_module_api=False)
                         )
         
         # configure model architecture
@@ -111,6 +118,7 @@ class DynaSINDy(BaseDynaSINDy):
         fcnet_hiddens = self.config.get('fcnet_hiddens', [64, 64])
         model_config.update({'fcnet_hiddens': fcnet_hiddens})
         drl_config_obj.training(model=model_config)
+        
         
         
         self.drl_algo = drl_config_obj.build()
@@ -127,7 +135,7 @@ class DynaSINDy(BaseDynaSINDy):
             self.real_env = self.config['real_env']
         
         # if self.real_env.use_old_api:
-        self.real_env = StepAPICompatibility(self.real_env, output_truncation_bool=False)
+        # self.real_env = StepAPICompatibility(self.real_env, output_truncation_bool=False)
         self.real_env.reset()
         # TO-DO: initialize with seed?
         return self.real_env
@@ -161,13 +169,17 @@ class DynaSINDy(BaseDynaSINDy):
 
         # determine if need to collect data or just load from file
         if off_policy_init['type'] == 'file':
-            self.off_policy_buffer.load(**off_policy_init['kwargs'])
+            self.off_policy_buffer.load_data(**off_policy_init['kwargs'])
         else:
             self.collect_data(self.off_policy_buffer,
                               self.real_env,
                               self.off_policy_pi, 
                               **off_policy_init['kwargs'])
             self.logger.info('Data collected.')
+            
+        if self.reset_from_buffer:
+            buffer_dict = self.off_policy_buffer.to_dict()
+            self.drl_config['environment']['env_config']['buffer_dict'] = buffer_dict
 
     def collect_data(self, buffer, env, pi, **rollout_kwargs):
         '''Collect data for a buffer with a given policy'''
@@ -255,6 +267,7 @@ class DynaSINDy(BaseDynaSINDy):
             rew_weights = self.rew_model.get_coef_list()
             
         self.drl_algo.workers.foreach_worker(update_dyn_and_rew_models(dyn_weights, rew_weights))
+        # TO-DO: FIX LOCATION
         self.n_dyn_updates += 1
 
     def get_buffer_metrics(self):
@@ -263,6 +276,15 @@ class DynaSINDy(BaseDynaSINDy):
         n_traj_on_pi = len(self.on_policy_buffer)
         n_traj_off_pi = len(self.off_policy_buffer)
         total_samples = self.on_pi_buffer_config['collect']['n_steps'] * (self.n_dyn_updates - 1) + n_samples_off_pi
+        
+        rews = self.on_policy_buffer.rew_traj_buffer
+        if len(rews)!=0:
+            last_on_policy_rew = np.sum(rews[-1])
+            on_policy_mean_rew =  np.mean([r.sum() for r in rews])
+        else:
+            last_on_policy_rew = np.nan
+            on_policy_mean_rew = np.nan
+        
         buffer_metrics = {
             'n_dyn_updates': self.n_dyn_updates,
             'n_samples': n_samples_on_pi + n_samples_off_pi,
@@ -271,6 +293,8 @@ class DynaSINDy(BaseDynaSINDy):
             'n_traj': n_traj_on_pi  + n_traj_off_pi,
             'n_traj_on_pi': n_traj_on_pi,
             'n_traj_off_pi': n_traj_off_pi,
-            'n_total_real': total_samples
+            'n_total_real': total_samples,
+            'last_on_policy_ep_rew': last_on_policy_rew,
+            'on_policy_ep_mean_rew': on_policy_mean_rew
         }
         return buffer_metrics

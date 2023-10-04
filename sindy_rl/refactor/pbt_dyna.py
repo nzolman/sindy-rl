@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings('ignore')
+
 import logging
 import os
 import numpy as np
@@ -39,7 +42,8 @@ def dyna_sindy(config):
     dyna.save_checkpoint(ckpt_num=-1, 
                          save_dir = tune.get_trial_dir())
     
-    collect_dict = {}
+    collect_dict = {'mean_rew': np.nan, 
+                    'mean_len': 0}
     for n_iter in range(train_iterations):
         checkpoint = None
         train_results = dyna.train_algo()
@@ -76,12 +80,25 @@ def dyna_sindy(config):
         train_results['traj_buffer'] = dyna.get_buffer_metrics()
         train_results['dyn_collect'] = collect_dict
         
-        # this may not be necessary.
+        # TO-DO: determine if this is necessary.
         if checkpoint:
             session.report(train_results, 
                            checkpoint=checkpoint)
         else:
             session.report(train_results)
+    
+def explore(dyna_config):
+    '''
+    Used for PBT. 
+    Ensures explored (continuous) parameters stay in a given range
+    '''
+    config = dyna_config['drl']['config']['training']
+    
+    config['lambda_'] = np.clip(config['lambda_'], 0, 1)
+    config['gamma'] = np.clip(config['gamma'], 0, 1)
+    
+    dyna_config['drl']['config']['training'] = config
+    return dyna_config
 
 if __name__ == '__main__': 
     import yaml
@@ -93,7 +110,7 @@ if __name__ == '__main__':
     from sindy_rl.refactor.policy import RandomPolicy
     from sindy_rl import _parent_dir
     
-    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/dyna_config_cart_test.yml'
+    filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/dyna_cylinder_test.yml'
     with open(filename, 'r') as f:
         dyna_config = yaml.load(f, Loader=yaml.SafeLoader)
     LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results',dyna_config['exp_dir'])
@@ -112,22 +129,25 @@ if __name__ == '__main__':
                                                 seed=0)
     
     ip_head = os.environ.get('ip_head', None)
-    ray.init(address=ip_head)
+    ray.init(address=ip_head, 
+             logging_level=logging.ERROR)
     print(ray.nodes())
-    
-    pbt = PopulationBasedTraining(
-        time_attr="training_iteration",
-        perturbation_interval=100,
-        resample_probability=0.25,
-        quantile_fraction=0.25,
-        # synch=True,
-        # Specifies the mutations of these hyperparams
-        hyperparam_mutations={
-            "drl/config/training/lr": tune.loguniform(1e-6, 1e-3),
-        },
-        # custom_explore_fn=explore,
-    )
-    
+
+    pbt_sched = None
+    if dyna_config.get('use_pbt', False):
+        pbt_config = dyna_config['pbt_config']
+        hyper_mut = {}
+        for key, val in pbt_config['hyperparam_mutations'].items():
+            search_class = getattr(tune, val['search_class'])
+            hyper_mut[key] = search_class(*val['search_space'])
+        
+        pbt_config['hyperparam_mutations'] = hyper_mut
+            
+        pbt_sched = PopulationBasedTraining(
+                        **pbt_config,
+                        custom_explore_fn=explore
+                    )
+
     ray_config = dyna_config['ray_config']
     run_config=air.RunConfig(
         local_dir=LOCAL_DIR,
@@ -135,10 +155,10 @@ if __name__ == '__main__':
     )
     
     
-    tune_config=tune.TuneConfig(**dyna_config['ray_config']['tune_config'],
-                                scheduler=pbt,
-                                metric="evaluation/episode_reward_mean",
-                                mode="max",)
+    tune_config=tune.TuneConfig(
+                    **dyna_config['ray_config']['tune_config'],
+                    scheduler=pbt_sched
+                    )
     
     drl_class, drl_default_config = rllib_algos.get(dyna_config['drl']['class'])()
     

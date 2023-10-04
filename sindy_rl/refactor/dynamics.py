@@ -1,4 +1,4 @@
-import gym
+# import gym
 import numpy as np
 import pysindy as ps
 import warnings

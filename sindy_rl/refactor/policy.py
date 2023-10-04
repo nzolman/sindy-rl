@@ -1,4 +1,5 @@
-from gym.spaces.box import Box
+from gymnasium.spaces.box import Box
+import numpy as np
 
 class BasePolicy:
     '''Parent class for policies'''
@@ -89,7 +90,6 @@ class SparseEnsemblePolicy(BasePolicy):
         '''
         return self.optimizer.coef_list
     
-    
     def set_mean_coef_(self, valid=False):
         '''
         Set the model coefficients to be the ensemble mean.
@@ -132,4 +132,97 @@ class SparseEnsemblePolicy(BasePolicy):
         '''
         self.optimizer.coef_ = self.optimizer.coef_list[idx]
         return self.optimizer.coef_
+
+class OpenLoopSinusoidPolicy(BasePolicy):
+    def __init__(self, dt=1, amp=1, phase=0, offset=0, f0=1, k=1):
+        self.amp = amp      # amplitude
+        self.phase = phase  # phase
+        self.offset = offset# offset
+        self.f0 = f0        # fundamental frequency
+        self.k = k          # wave number
         
+        self.dt = dt        # used for updating the time 
+        self.t = 0
+        
+        self.freq = 2 * np.pi * self.k/self.f0
+        
+    def compute_action(self, obs):
+        '''
+        Return deterministic sine output
+        
+        Inputs:
+            obs: ndarray (unused)
+        Returns: 
+            Sinusoidal output depending on the number of calls
+            to the policy. 
+        '''
+        self.t += self.dt
+        
+        u = self.amp * np.sin(self.freq * self.t -self.phase) + self.offset
+        return np.array([u])
+    
+    
+class OpenLoopSinRest(OpenLoopSinusoidPolicy):
+    def __init__(self, t_rest, **kwargs):
+        super().__init__(**kwargs)
+        self.t_rest = t_rest
+        
+    def compute_action(self, obs):
+        '''
+        Return deterministic sine output, then
+        do nothing
+        
+        Inputs:
+            obs: ndarray (unused)
+        Returns: 
+            Sinusoidal output depending on the number of calls
+            to the policy. 
+        '''
+        u = super().compute_action(obs)
+        
+        if self.t >= self.t_rest:
+            u = u * 0.0
+        return u
+    
+    
+class OpenLoopRandRest(RandomPolicy):
+    def __init__(self, steps_rest, **kwargs):
+        super().__init__(**kwargs)
+        self.steps_rest = steps_rest
+        self.n_steps = 0
+        
+    def compute_action(self, obs):
+        self.n_steps += 1
+        u = super().compute_action(obs)
+        
+        if self.n_steps >= self.steps_rest:
+            u = 0.0 * u
+        return u
+
+class SwitchPolicy(BasePolicy):
+    def __init__(self, policies):
+        self.policies = policies
+        self.policy = policies[0]
+    
+    def switch_criteria(self):
+        pass
+    
+    def compute_action(self, obs):
+        policy = self.switch_criteria()
+        return policy.compute_action(obs)
+        
+class SwitchAfterT(SwitchPolicy):
+    def __init__(self, t_switch, policies):
+        super().__init__(policies)
+        self.t_switch = t_switch
+        self.n_steps = 0
+        
+    def switch_criteria(self):
+        self.n_steps += 1
+        
+        if self.n_steps < self.t_switch: 
+            policy_idx = 0
+        else: 
+            policy_idx = 1
+        
+        return self.policies[policy_idx]
