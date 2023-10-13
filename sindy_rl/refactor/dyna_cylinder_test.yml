@@ -11,6 +11,7 @@ real_env:
   config: 
       hydro_config:
         flow_config:
+          actuator_integration: 'implicit'
           Re: 100
           mesh: medium
           restart: '/home/firedrake/sindy-rl/data/hydro/cylinder/2023-10-02_medium/Re=100_dt=1e-3/snapshots/no_control_95000.ckpt'
@@ -43,6 +44,7 @@ drl:
         real_env_config: 
             hydro_config:
               flow_config:
+                actuator_integration: 'implicit'
                 Re: 100
                 mesh: medium
                 restart: '/home/firedrake/sindy-rl/data/hydro/cylinder/2023-10-02_medium/Re=100_dt=1e-3/snapshots/no_control_95000.ckpt'

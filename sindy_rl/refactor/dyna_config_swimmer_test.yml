@@ -1,6 +1,6 @@
-exp_dir: test
+exp_dir: pbt
 n_train_iter: 40000
-dyn_fit_freq: 10
+dyn_fit_freq: 5
 fcnet_hiddens: [64, 64]
 use_pbt: True
 
@@ -68,7 +68,7 @@ drl:
             max_episode_steps: 1000
             reward_threshold: 360
         explore: False
-      evaluation_interval: 10
+      evaluation_interval: 5
       evaluation_duration: 5
       evaluation_duration_unit: "episodes"
       always_attach_evaluation_results: True
@@ -154,14 +154,17 @@ rew_model:
 
 ray_config:
     run_config:
-        name: "dyna_swimmer_pbt_choice_rew=med_dyn=med_refit=10_collect=12k"
+        name: "dyna-swimmer_choice_rew=med_dyn=med_refit=5_collect=12k_pbt=50_check=25_save"
         stop:
             # timesteps_total
             num_env_steps_sampled: 5.0e+6
         log_to_file: True 
+        verbose: 2
     tune_config:
         num_samples: 20 # number of sample trials to run
     checkpoint_freq: 25
+    checkpoint_config:
+      checkpoint_score_attribute: "dyn_collect/mean_rew"
 
 
 pbt_config:
