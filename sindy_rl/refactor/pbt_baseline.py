@@ -18,7 +18,8 @@ if __name__ == '__main__':
     
     from sindy_rl import _parent_dir
     
-    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_swimmer_config_test.yml'
+    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_dm_config_test.yml'
+    # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_swimmer_config_test.yml'
     # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_config.yml'
     with open(filename, 'r') as f:
         config = yaml.load(f, Loader=yaml.SafeLoader)
@@ -67,8 +68,10 @@ if __name__ == '__main__':
     drl_config['environment']['env'] = getattr(registry, drl_config['environment']['env'])
 
     drl_default_config = (drl_default_config
+                         .rl_module(_enable_rl_module_api=False)
                          .environment(**drl_config['environment'])
-                         .training(**drl_config['training'])
+                         .training(**drl_config['training'],
+                                   _enable_learner_api=False)
                          .evaluation(**drl_config['evaluation'])
                         )
     
