@@ -7,7 +7,16 @@ class BasePolicy:
         raise NotImplementedError
     def compute_action(self, obs):
         raise NotImplementedError
-    
+
+class FixedPolicy(BasePolicy): 
+    def __init__(self, fixed_actions):
+        self.fixed_actions = fixed_actions
+        self.n_step = 0
+        self.n_acts = len(fixed_actions)
+    def compute_action(self, obs):
+        u = self.fixed_actions[self.n_step % self.n_acts]
+        self.n_step += 1
+        return u
 
 class RLlibPolicyWrapper(BasePolicy):
     '''Wraps an RLlib algorithm into a BasePolicy class'''
@@ -19,7 +28,6 @@ class RLlibPolicyWrapper(BasePolicy):
         if self.mode == 'policy':
             res = res[0]
         return res
-        
 
 class RandomPolicy(BasePolicy):
     '''
