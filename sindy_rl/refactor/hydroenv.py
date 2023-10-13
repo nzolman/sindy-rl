@@ -122,7 +122,9 @@ class CylinderLiftEnv(HydroEnvWrapper):
             "flow": hgym.Cylinder,
             "solver": hgym.IPCS,
             "flow_config": {
-                'mesh': 'coarse'
+                'mesh': 'medium',
+                'actuator_integration': 'implicit',
+                'Re': 100
             }
         }
 

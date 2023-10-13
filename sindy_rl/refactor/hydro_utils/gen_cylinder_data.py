@@ -44,6 +44,7 @@ def gen_random_then_none(checkpoint,
     flow_config = {
         "flow": hgym.Cylinder,
         "flow_config": {
+            'actuator_integration': 'implicit',
             'mesh':mesh,
             'Re': Re,
             'restart': checkpoint
@@ -104,6 +105,7 @@ def gen_sine_then_none(checkpoint,
     flow_config = {
         "flow": hgym.Cylinder,
         "flow_config": {
+            'actuator_integration': 'implicit',
             'mesh':mesh,
             'Re': Re,
             'restart': checkpoint
@@ -179,15 +181,21 @@ if __name__ == '__main__':
     _DT = 1e-3
     
     data_dir = os.path.join(_parent_dir, 
-                            'data/hydro/cylinder/', 
+                            'data/hydro/cylinder/'
+                            )
+    
+    load_data_dir = os.path.join(data_dir ,
                             f'2023-10-02_medium/Re={_RE}_dt=1e-3/'
                             )
-    check_path = os.path.join(data_dir, 
+    check_path = os.path.join(load_data_dir, 
                               'snapshots',
                               'no_control_95000.ckpt'
                               )
     
-    save_dir = os.path.join(data_dir, 'control')
+    save_data_dir = os.path.join(data_dir ,
+                            f'2023-10-04_medium/Re={_RE}_dt=1e-3_implict/'
+                            )
+    save_dir = os.path.join(save_data_dir, 'control')
     os.makedirs(save_dir, exist_ok=True)
     
     save_path = os.path.join(save_dir, 

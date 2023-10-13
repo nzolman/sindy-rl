@@ -37,7 +37,8 @@ def make_no_control_checkpoints(save_dir,
         "flow": hgym.Cylinder,
         "flow_config": {
             'mesh':mesh,
-            'Re': Re
+            'Re': Re,
+            'actuator_integration': 'implicit'    
         },
         "solver": hgym.IPCS,
         "solver_config":

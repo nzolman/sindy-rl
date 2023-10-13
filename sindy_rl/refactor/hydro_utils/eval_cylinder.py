@@ -8,7 +8,7 @@ from ray.rllib.algorithms import Algorithm
 from sindy_rl.refactor.policy import RLlibPolicyWrapper, RandomPolicy, SwitchAfterT
 from sindy_rl.refactor.hydroenv import CylinderLiftEnv
 from sindy_rl.refactor.env import rollout_env
-
+from sindy_rl.refactor.traj_buffer import BaseTrajectoryBuffer
 
 
 if __name__ == '__main__':
@@ -20,7 +20,7 @@ if __name__ == '__main__':
                              'dyna_sindy_30229_00004_4_2023-10-04_05-02-16')
     
     ckpt_path = os.path.join(trial_dir, 
-                             'checkpoint_000100'
+                             'checkpoint_000070'
                              )
     
     save_dir = os.path.join(parent_dir, 'data', 'hydro', 'cylinder', 'eval', 
@@ -29,16 +29,19 @@ if __name__ == '__main__':
                             )
     os.makedirs(save_dir, exist_ok=True)
     
-    flow_config = {
+    flow_env_config = {
+                'flow_config': {
+                    'actuator_integration': 'implicit',
                     'Re': 100,
                     'mesh': 'medium',
                     'restart': '/home/firedrake/sindy-rl/data/hydro/cylinder/2023-10-02_medium/Re=100_dt=1e-3/snapshots/no_control_95000.ckpt',
-                    'solver_config': {
-                        'dt': 1.0e-3
-                    },
-    }           
+                },
+                'solver_config': {
+                    'dt': 1.0e-3
+                },
+            }           
     
-    env_config = {'hydro_config': flow_config,
+    env_config = {'hydro_config': flow_env_config,
                  'n_skip_on_reset': 50,
                  'control_freq': 10,
                  'max_episode_steps': 4000,
@@ -63,3 +66,6 @@ if __name__ == '__main__':
             print('checkpoint saved!', checkpath)
 
     obs_list, act_list, rew_list = rollout_env(env, switch_policy, n_steps = 4000, env_callback=callback, verbose=True)
+    buffer  = BaseTrajectoryBuffer()
+    buffer.add_data(obs_list, act_list, rew_list)
+    buffer.save_data(os.path.join(save_dir, 'traj_data.pkl'))
