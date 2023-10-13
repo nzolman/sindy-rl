@@ -1,5 +1,6 @@
 import numpy as np
 import pysindy as ps
+import pickle
 
 
 from sindy_rl.refactor.sindy_utils import build_optimizer, build_feature_library
@@ -26,6 +27,7 @@ class FunctionalRewardModel(BaseRewardModel):
                 signature: rew_fn(x, u, **kwargs)
                 returns scalar reward for 1-d arrays x,u
         '''
+        self.config = config
         self.rew_fn = getattr(reward_fns, config['name'])
         self.rew_kwargs = config.get('kwargs', {})
         self.can_update = False
@@ -35,6 +37,19 @@ class FunctionalRewardModel(BaseRewardModel):
 
     def fit(self, X, U, Y):
         return None
+    
+    def save(self, save_path):
+        '''EXPERIMENTAL'''
+        
+        with open(save_path, 'wb') as f:
+            pickle.dump(self.config, f)
+            
+    def load(self, load_path):
+        with open(load_path, 'rb') as f:
+            config = pickle.load(f)
+        
+        self.__init__(config)
+        
 
 class EnsembleSparseRewardModel(BaseRewardModel):
     '''
@@ -106,6 +121,12 @@ class EnsembleSparseRewardModel(BaseRewardModel):
         self.optimizer.fit(ThetaX, Y_tmp)
         self._is_fitted = (True and init)
         self.safe_idx = np.ones(self.n_models, dtype=bool)
+        
+        self.n_state = X[0][0].shape[0]
+        if self.use_control:
+            self.n_control = U[0][0].shape[0]
+        else: 
+            self.n_control = 1
         
     def reset_safe_list(self):
         self.safe_idx = np.ones(self.n_models, dtype=bool)
@@ -216,3 +237,25 @@ class EnsembleSparseRewardModel(BaseRewardModel):
     def set_ensemble_coefs_(self, weight_list):
         self.optimizer.coef_list = weight_list
         self.optimizer.coef_ = self.set_idx_coef_(0)
+        
+    def save(self, save_path):
+        '''EXPERIMENTAL'''
+        
+        with open(save_path, 'wb') as f:
+            pickle.dump(self, f)
+    
+    def load(self, load_path):
+        '''EXPERIMENTAL'''
+        
+        with open(load_path, 'rb') as f:
+            model = pickle.load(f)
+
+            self.__init__(model.config)
+            
+            x_tmp = np.ones((10, model.n_state))
+            u_tmp = np.ones((10, model.n_control))
+            r_tmp = np.ones((10, 1))
+            self.fit([x_tmp], U=[u_tmp], Y=[r_tmp])
+            
+            self.optimizer.coef_list = model.optimizer.coef_list
+            self.optimizer.coef_ = model.optimizer.coef_

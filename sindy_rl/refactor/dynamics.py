@@ -3,6 +3,13 @@ import numpy as np
 import pysindy as ps
 import warnings
 from tqdm import tqdm
+import pickle
+
+import torch
+from torch import nn
+from torch import optim
+from torch.utils.data import DataLoader, Dataset, random_split
+
 import os
 from scipy.integrate import solve_ivp
 
@@ -75,6 +82,9 @@ class EnsembleSINDyDynamicsModel(BaseDynamicsModel):
         self.optimizer.coef_list = []
         self.model.fit(observations, u=actions, multiple_trajectories=True, t=self.dt, **sindy_fit_kwargs)
         self.safe_idx = np.ones(self.n_models, dtype=bool)
+        
+        self.n_state = observations[0][0].shape[0]
+        self.n_control = actions[0][0].shape[0]
         return self.model
     
     def validate_ensemble(self, x0, u_data, targets, thresh = None, verbose = True, **sim_kwargs):
@@ -238,6 +248,7 @@ class EnsembleSINDyDynamicsModel(BaseDynamicsModel):
         if self.callbacks is not None:    
             update = self.callbacks(update)
         return update
+
     def print(self):
         '''wrapper for pysindy print'''
         self.model.print()
@@ -245,3 +256,292 @@ class EnsembleSINDyDynamicsModel(BaseDynamicsModel):
     def set_ensemble_coefs_(self, weight_list):
         self.model.optimizer.coef_list = weight_list
         self.model.optimizer.coef_ = self.set_idx_coef_(0)
+        
+    def save(self, save_path):
+        '''EXPERIMENTAL'''
+        # save_data = {'model': self.model,
+        #              'n_state': self.n_state,
+        #              'n_control': self.n_control
+        #              }
+        
+        with open(save_path, 'wb') as f:
+            pickle.dump(self, f)
+    
+    def load(self, load_path):
+        '''EXPERIMENTAL'''
+        
+        with open(load_path, 'rb') as f:
+            model = pickle.load(f)
+            config = model.config
+            self.__init__(config)
+            
+            x_tmp = np.ones((10, model.n_state))
+            u_tmp = np.ones((10, model.n_control))
+            self.fit([x_tmp], [u_tmp])
+            
+            self.model.optimizer.coef_list = model.optimizer.coef_list
+            self.model.optimizer.coef_ = model.optimizer.coef_
+        
+        # self.n_state = load_data['n_state']
+        # self.n_control = load_data['n_control']
+        
+        # model = load_data['model']
+        # coef_list = model.optimizer.coef_list
+        # n_models = len(coef_list)
+        # self.n_models = 
+        
+
+class FCNet(nn.Module):
+    '''Fully Connected Neural Network'''
+    def __init__(self, n_input, n_output, hidden_size=64):
+        self.n_input = n_input
+        self.n_output = n_output
+        self.hidden_size = hidden_size
+        super().__init__()
+        
+        self.activation = nn.Tanh()
+        
+        self.linear_in = nn.Linear(self.n_input, hidden_size)
+        self.linear_hidden= nn.Linear(hidden_size, hidden_size)
+        self.linear_out = nn.Linear(hidden_size, self.n_output)
+        
+        layers = [self.linear_in, self.linear_hidden, self.linear_out]
+
+        #TO-DO: Figure out appropriate place to set seeds
+        bias_init = 0.0
+        initializer = nn.init.xavier_uniform_
+        for layer in layers:
+            initializer(layer.weight)
+            nn.init.constant_(layer.bias, bias_init)
+
+    def forward(self, x):
+        x = self.linear_in(x)
+        x = self.activation(x)
+        x = self.linear_hidden(x)
+        x = self.activation(x)
+        x = self.linear_out(x)
+        return x
+
+
+def _reshape_data(obs_trajs, u_trajs, dtype=torch.float32):
+    X_in = [obs_traj[:-1] for obs_traj in obs_trajs]
+    X_out = [obs_traj[1:] for obs_traj in obs_trajs]
+    U_in = [u_traj[:-1] for u_traj in u_trajs]
+
+    X_in = torch.tensor(np.concatenate(X_in, axis=0), dtype=dtype)
+    X_out = torch.tensor(np.concatenate(X_out, axis=0), dtype=dtype)
+    U_in = torch.tensor(np.concatenate(U_in, axis=0), dtype=dtype)
+    
+    XU_in = torch.concat((X_in, U_in), dim=-1)
+    return XU_in, X_out
+
+class TrajDataset(Dataset):
+    def __init__(self, XU, X_out):
+        self.XU = XU
+        self.X_out = X_out
+
+    def __len__(self):
+        return len(self.XU)
+
+    def __getitem__(self, idx):
+        xu = self.XU[idx]
+        x_out = self.X_out[idx]
+        return xu, x_out
+
+class SingleNetDynamicsModel(BaseDynamicsModel):
+    '''A single-neural network dynamics model of the form
+        x_{n+1} = NN(x_n, u_n)
+       Where NN is a fully connected neural net (FCNet class)
+    '''
+    def __init__(self, config):
+        self.config = config
+        self.nn_kwargs = config.get('nn_kwargs', {})
+        self.callbacks = config.get('callbacks', None)
+        self.optimizer_kwargs = config.get('optimizer_kwargs', {})
+        self.n_epochs = config.get('n_epochs', 100)
+        self.batch_size = config.get('batch_size', 500)
+        
+        self.callbacks = config.get('callbacks', None)
+        
+        
+        self.model = FCNet(**self.nn_kwargs)
+        self.optimizer = optim.Adam(self.model.parameters(), 
+                                    **self.optimizer_kwargs)
+        # self.optimizer = optim.LBFGS(self.model.parameters(), 
+        #                             **self.optimizer_kwargs)
+        self.loss_fn = torch.nn.MSELoss()
+        
+        
+        
+        if self.callbacks is not None:
+            self.callbacks = getattr(dynamics_callbacks, self.callbacks)
+        
+    def predict(self, x, u, dtype=torch.float32): 
+        '''The one-step predictor'''
+        x_in = torch.tensor(np.array(x), dtype=dtype)
+        u_in = torch.tensor(np.array(u), dtype=dtype)
+        xu_in = torch.concat((x_in, u_in), dim=-1)
+        
+        update = self.model(xu_in)
+
+        if isinstance(update, torch.Tensor):
+            update = update.detach().numpy()
+
+        if self.callbacks is not None:
+            update = self.callbacks(update)
+        return update
+    
+    def set_weights_(self, state_dict):
+        self.model.load_state_dict(state_dict)
+        
+    def get_coef_list(self):
+        return self.model.state_dict()
+    
+    def _get_val_loss(self, val_dataset):
+        xu, x_out = val_dataset[:]
+        
+        with torch.no_grad():
+            output = self.model(xu)
+            val_loss = self.loss_fn(output, x_out)
+        return val_loss
+    
+    def fit(self, XU_in, X_out):
+        '''We assume XU_in and X_out are outputs of `_reshape_data`
+        and ready to be passed into the neural network. 
+        
+        vvvv
+        We also
+        assume that we're dealing with small enough batch sizes to make 
+        use of fully-batch optimization with the L-BFGS optimizer
+        ^^^^
+        
+        Because we don't actually expect to use a single model by itself,
+        we'll let the ensemble dispatch the proper training sets
+        
+        TO-DO: figure out if callbacks need to be here...?
+        Probably not because we'd have to have the callbacks
+        be differentialbe?
+        '''
+        n_pts = len(XU_in)
+        
+        dataset=TrajDataset(XU_in, X_out)
+        n_train = int(0.8*n_pts)
+        n_val = n_pts - n_train
+        
+        train_dataset, val_dataset = random_split(dataset, [n_train, n_val])
+        train_dataloader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle = True)
+        
+        val_loss_prev = np.inf
+        
+        for epoch in range(self.n_epochs):
+            for xu, x_out in train_dataloader:
+                def closure():
+                    self.optimizer.zero_grad()
+                    output = self.model(xu)
+                    loss = self.loss_fn(output, x_out)
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                    return loss
+                self.optimizer.step(closure)
+                
+
+            # compare previous validation loss. If we have an increase, stop training
+            val_loss = self._get_val_loss(val_dataset)
+            if val_loss_prev < val_loss:
+                break
+            val_loss_prev = val_loss
+            
+        return self.model, val_loss, epoch
+    
+
+# TO-DO:
+# - Incorporate two modes: mean (of output) or sample
+# - provide individual random seeds
+# - split data
+class EnsembleNetDynamicsModel(BaseDynamicsModel):
+    '''
+    An ensemble wrapper for `n_models` identical SingleNetDynamicsModel objects.
+    When multiple trajectories are provided, their (x_n, u_n), x_{n+1} pairs are generated
+    and then the all samples are split among the 
+    '''
+    def __init__(self, config): 
+        self.config = config
+        self.n_models = config.get('n_models', 5)
+        self.single_model_config = config.get('single_model_config', None)
+        
+        
+        self.frac_subset = config.get('frac_subset', 0.6) # fraction of samples to provide each model
+        self.resample = config.get('resample', True) # Whether to resample
+
+        assert self.single_model_config is not None, "Must include single model configuration"
+        
+        self.ensemble = [SingleNetDynamicsModel(self.single_model_config) for n in range(self.n_models)]
+        
+        # TO-DO: figure out if this is necessary? But apply
+        # whatever callback we have from the individual members
+        # in case taking the mean, etc. un-projects the data.
+        self.callbacks = self.ensemble[0].callbacks
+
+    def split_data(self, X, Y): 
+        n_pts = len(X)
+        splits = []
+        for n in range(self.n_models):
+            idx = np.random.choice(n_pts, size= int(n_pts*self.frac_subset), replace=False)
+            splits.append((X[idx], Y[idx]))
+        return splits
+    
+    def fit(self, observations, actions, dtype=torch.float32):
+        XU_in, X_out = _reshape_data(observations, actions, dtype=dtype)
+        
+        # split among members of the ensemble
+        datasets = self.split_data(XU_in, X_out) # IMPLEMENT
+        
+        val_losses = []
+        epochs = []
+        for (xu_in, x_out), net_model in zip(datasets, self.ensemble):
+            
+            net, val_loss, epoch = net_model.fit(xu_in, x_out)
+            val_losses.append(val_loss)
+            
+            epochs.append(epoch)
+        
+        return val_losses, epochs
+        
+    
+    def get_coef_list(self):
+        return [net_model.get_coef_list() for net_model in self.ensemble]
+    
+    def set_ensemble_coefs_(self, state_dicts):
+        '''
+        TO-DO: set optimizer values, too...? 
+        '''
+        for (net_model, state_dict) in zip(self.ensemble, state_dicts):
+            net_model.set_weights_(state_dict)
+    
+    def predict(self, x, u):
+        preds = np.array([net_model.predict(x,u) for net_model in self.ensemble])
+        update = np.mean(preds, axis=0)
+        
+        if self.callbacks is not None:    
+            update = self.callbacks(update)
+
+        return update
+    
+    def set_mean_coef_(self, **kwargs):
+        pass
+    
+    
+    def save(self, save_path):
+        '''EXPERIMENTAL'''
+        
+        with open(save_path, 'wb') as f:
+            pickle.dump(self, self.get_coef_list())
+    
+    def load(self, load_path):
+        '''EXPERIMENTAL'''
+        
+        with open(load_path, 'rb') as f:
+            state_dicts = pickle.load(f)
+        
+        self.set_ensemble_coefs_(state_dicts)
+        
