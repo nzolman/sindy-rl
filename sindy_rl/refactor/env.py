@@ -5,8 +5,6 @@ import pysindy as ps
 from tqdm import tqdm 
 
 from sindy_rl.refactor import dynamics, reward
-from sindy_rl.refactor.dynamics import EnsembleSINDyDynamicsModel
-from sindy_rl.refactor.reward import EnsembleSparseRewardModel
 from sindy_rl.refactor import registry
 
 def safe_reset(res):
@@ -142,8 +140,8 @@ class BaseSurrogateEnv(gymnasium.Env):
         # TO DO: Make this more general!
         dynamics_class = getattr(dynamics, self.dynamics_model_config['class'])
         self.dynamics_model = dynamics_class(self.dynamics_model_config['config'])
-        # self.dynamics_model = EnsembleSINDyDynamicsModel(self.dynamics_model_config)
         
+        # TO-DO: This might need to change for the NN model.
         # init weights
         if self._init_weights: 
             x_tmp = np.ones((10, self.obs_dim))
@@ -155,8 +153,6 @@ class BaseSurrogateEnv(gymnasium.Env):
         
         rew_class = getattr(reward, self.rew_model_config['class'])
         self.rew_model = rew_class(self.rew_model_config['config'])
-        
-        # self.rew_model = EnsembleSparseRewardModel(self.rew_model_config)
         
         if self._init_weights: 
             x_tmp = np.ones((10, self.obs_dim))
@@ -261,7 +257,7 @@ class BaseSurrogateEnv(gymnasium.Env):
 
 
 class BaseEnsembleSurrogateEnv(BaseSurrogateEnv):
-    '''Wrapper to initialize surrogate environment with Ensemble SINDy dynamics models'''
+    '''Wrapper to initialize surrogate environment with Ensemble dynamics models'''
     def __init__(self, config):
         super().__init__(config)
         

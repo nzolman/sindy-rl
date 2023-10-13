@@ -1,4 +1,5 @@
 import warnings
+import numpy as np
 from gymnasium.envs.mujoco.swimmer_v4 import SwimmerEnv
 from ray.rllib.env.wrappers.dm_control_wrapper import DMCEnv
 
@@ -12,19 +13,14 @@ except ImportError:
     
 
 class DMCEnvWrapper(DMCEnv):
+    '''
+    A wrapper for all dm-control environments using RLlib's 
+    DMCEnv wrapper. 
+    '''
+    # need to wrap with config dict instead of just passing kwargs
     def __init__(self, config=None):
         env_config = config or {}
         super().__init__(**env_config)
-        
-    # # needed for MBMPO!
-    # def reward(self, obs, action, obs_next):
-    #     rew = cart_reward(obs_next.T, action)
-    #     return rew
-        
-    
-    # def reset(self,seed=None):
-    #     '''Note, the seed actually does nothing right now. Just to conform to our method'''
-    #     return super().reset()
 
 class SwimmerWrapper(SwimmerEnv):
     def __init__(self, config=None):

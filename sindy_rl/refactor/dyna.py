@@ -3,6 +3,7 @@ import os
 import pickle
 import numpy as np
 import time
+import yaml
 
 from ray.rllib.algorithms.algorithm import Algorithm
 from ray.rllib.algorithms.registry import ALGORITHMS as rllib_algos
@@ -104,12 +105,11 @@ class DynaSINDy(BaseDynaSINDy):
         
         # prep the config object
         drl_config_obj = (drl_config_obj
+                            .rl_module(_enable_rl_module_api=False)
                             .environment(**self.drl_config['environment'])
                             .training(**self.drl_config['training'],
                                       _enable_learner_api=False)
-                            
                             .evaluation(**self.drl_config['evaluation'])
-                            .rl_module(_enable_rl_module_api=False)
                         )
         
         # configure model architecture
@@ -118,8 +118,6 @@ class DynaSINDy(BaseDynaSINDy):
         fcnet_hiddens = self.config.get('fcnet_hiddens', [64, 64])
         model_config.update({'fcnet_hiddens': fcnet_hiddens})
         drl_config_obj.training(model=model_config)
-        
-        
         
         self.drl_algo = drl_config_obj.build()
         self.on_policy_pi = RLlibPolicyWrapper(self.drl_algo)
@@ -140,7 +138,6 @@ class DynaSINDy(BaseDynaSINDy):
         # TO-DO: initialize with seed?
         return self.real_env
         
-        
     def _init_off_policy(self):
         '''Initialize the off-policy Policy'''
         # TO-DO: build this
@@ -150,13 +147,11 @@ class DynaSINDy(BaseDynaSINDy):
         '''Initialize dynamics model'''
         dynamics_class = getattr(dynamics, self.dyn_config['class'])
         self.dynamics_model = dynamics_class(self.dyn_config['config'])
-        # self.dynamics_model = EnsembleSINDyDynamicsModel(self.dyn_config)
     
     def _init_rew_model(self):
         '''Initialize reward model'''
         rew_class = getattr(reward, self.rew_config['class'])
         self.rew_model = rew_class(self.rew_config['config'])
-        # self.rew_model = EnsembleSparseRewardModel(self.rew_config)
         
     def _init_data_buffers(self):
         '''Initialize the data buffers'''
@@ -210,53 +205,82 @@ class DynaSINDy(BaseDynaSINDy):
         self.rew_model.fit(x, Y=r, U=u)
         
     def train_algo(self):
-        '''Train algorithm for one 'iteration'
-        '''
+        '''Train algorithm for one 'iteration'''
         return self.drl_algo.train()
-        
-    
+
     def save_checkpoint(self, ckpt_num, save_dir):
         # setup directories
         # TO-DO: ensure this ckpt_num is the right number/format.
-        # TO-DO: probably good idea to save off-pi data?
         
         ckpt_dir = os.path.join(save_dir, f'checkpoint_{ckpt_num+1:06}')
+        checkpoint = self.drl_algo.save(save_dir)
         
         dyn_path = os.path.join(ckpt_dir, 'dyn_model.pkl')
         rew_path = os.path.join(ckpt_dir, 'rew_model.pkl')
-        data_path = os.path.join(ckpt_dir,'on-pi_data.pkl')
+        data_path_on = os.path.join(ckpt_dir,'on-pi_data.pkl')
+        data_path_off = os.path.join(ckpt_dir,'off-pi_data.pkl')
         
-        checkpoint = self.drl_algo.save(save_dir)
+        self.dynamics_model.save(dyn_path)
+        self.rew_model.save(rew_path)
+                
+        self.on_policy_buffer.save_data(data_path_on)
+        self.off_policy_buffer.save_data(data_path_off)
         
-        with open(dyn_path, 'wb') as f:
-            pickle.dump(self.dynamics_model, f)
-            
-        with open(rew_path, 'wb') as f:
-            pickle.dump(self.rew_model, f)
-            
-        self.on_policy_buffer.save_data(data_path)
-        return checkpoint
-    
-    def load_checkpoint(self, ckpt_dir):
+        check_dict = {  'epoch': ckpt_num,
+                        'checkpoint_dir': ckpt_dir,
+                        'algo_dir': checkpoint,
+                        'dyn_model': self.dynamics_model,
+                        'rew_model': self.rew_model,
+                        'on-policy': self.on_policy_buffer,
+                        'off-policy': self.off_policy_buffer
+                      }
+        return check_dict
+
+    def load_checkpoint(self, check_dict):
         '''
         Restore dyna algorithm from saved checkpoint
         '''
-        self.drl_algo.restore(ckpt_dir)
+        ckpt_dir = check_dict['checkpoint_dir']
+        algo_dir = check_dict['algo_dir']
         
-        # rew_path = os.path.join(ckpt_dir, 'rew_model.pkl')
-        # data_path = os.path.join(ckpt_dir,'on-pi_data.pkl')
-        # dyn_path = os.path.join(ckpt_dir, 'dyn_model.pkl')
+        dyn_path = os.path.join(ckpt_dir, 'dyn_model.pkl')
+        rew_path = os.path.join(ckpt_dir, 'rew_model.pkl')
+        data_path_on = os.path.join(ckpt_dir,'on-pi_data.pkl')
+        data_path_off = os.path.join(ckpt_dir,'off-pi_data.pkl')
         
-        # with open(dyn_path, 'rb') as f:
-        #     self.dynamics_model= pickle.load( f)
-            
-        # with open(rew_path, 'rb') as f:
-        #     self.rew_model = pickle.load(f)
-            
-        # self.update_surrogate()
+        # self.dynamics_model.load(dyn_path)
+        # self.rew_model.load(rew_path)
+
+        # self.on_policy_buffer.load_data(data_path_on)
+        # self.off_policy_buffer.load_data(data_path_off)
+
+        # This is probably redundant.
+        # self.fit_dynamics()
+        # self.fit_rew()
+        self.dynamics_model = check_dict['dyn_model']
+        self.rew_model = check_dict['rew_model']
+        self.on_policy_buffer = check_dict['on-policy']
+        self.off_policy_buffer = check_dict['off-policy']
         
-        # self.on_policy_buffer.load_data(data_path, clean=True)
-    
+
+        # Hacky way to deal with the file not existing immediately...?
+        # Weirdly this seems to work
+        n_tries = 12
+        dt = 5
+        for i in range(n_tries):
+            try:
+                self.drl_algo.restore(algo_dir)
+                
+                # not _entirely_ clear this is necessary. But better to be safe
+                self.on_policy_pi = RLlibPolicyWrapper(self.drl_algo)
+                break
+            except FileNotFoundError:
+                time.sleep(dt)
+                
+        self.update_surrogate()
+        
+        return ckpt_dir
+
     def update_surrogate(self):
         '''Updating surrogate model'''
         self.logger.info('Updating worker weights')
