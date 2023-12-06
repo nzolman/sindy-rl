@@ -6,3 +6,10 @@ def project_cartpole(z):
     u = np.array([cos_th, sin_th])
     new_cos, new_sin = u/np.linalg.norm(u)
     return np.array([cart_pos, new_cos, new_sin, dx, dth])
+
+def project_pend(z): 
+    cos_th, sin_th, dth = z
+    
+    u = np.array([cos_th, sin_th])
+    new_cos, new_sin = u/np.linalg.norm(u)
+    return np.array([new_cos, new_sin, dth])
