@@ -140,9 +140,34 @@ class SparseEnsemblePolicy(BasePolicy):
         '''
         self.optimizer.coef_ = self.optimizer.coef_list[idx]
         return self.optimizer.coef_
+    
+    def print(self, input_features=None, precision=3):
+        '''
+        Analagous to SINDy model print function
+        Inputs:
+            input_features: (list)
+                List of strings for each state/control feature
+            precision: (int)
+                Floating point precision for printing.
+        '''
+        lib = self.feature_library
+        feature_names = lib.get_feature_names(input_features=input_features)
+        coefs = self.optimizer.coef_
+        for idx, eq in enumerate(coefs): 
+            print_str = f'u{idx} = '
+            
+            for c, name in zip(eq, feature_names):
+                c_round = np.round(c, precision)
+                if c_round != 0:
+                    print_str += f'{c_round:.{precision}f} {name} + '
+            
+            print(print_str[:-2])
 
 class OpenLoopSinusoidPolicy(BasePolicy):
     def __init__(self, dt=1, amp=1, phase=0, offset=0, f0=1, k=1):
+        '''
+        Amp * sin(freq * t - phase) + offset
+        '''
         self.amp = amp      # amplitude
         self.phase = phase  # phase
         self.offset = offset# offset
@@ -153,6 +178,7 @@ class OpenLoopSinusoidPolicy(BasePolicy):
         self.t = 0
         
         self.freq = 2 * np.pi * self.k/self.f0
+        
         
     def compute_action(self, obs):
         '''
@@ -169,7 +195,7 @@ class OpenLoopSinusoidPolicy(BasePolicy):
         u = self.amp * np.sin(self.freq * self.t -self.phase) + self.offset
         return np.array([u])
     
-    
+
 class OpenLoopSinRest(OpenLoopSinusoidPolicy):
     def __init__(self, t_rest, **kwargs):
         super().__init__(**kwargs)
@@ -234,3 +260,23 @@ class SwitchAfterT(SwitchPolicy):
             policy_idx = 1
         
         return self.policies[policy_idx]
+    
+    
+
+class SignPolicy(BasePolicy):
+    def __init__(self,policy, mag=1.0, thresh = 0):
+        self.wrapper = policy
+        self.mag = mag
+        self.thresh = thresh
+        
+    def compute_action(self, obs):
+        # compute action from policy
+        action = self.wrapper.compute_action(obs)
+        
+        # compute whether the action meets a threshold
+        mask = np.abs(action) < self.thresh
+        
+        return np.sign(action)*self.mag * mask
+    
+    def set_mean_coef_(self):
+        self.wrapper.set_mean_coef_()
