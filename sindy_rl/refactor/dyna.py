@@ -103,6 +103,9 @@ class DynaSINDy(BaseDynaSINDy):
                                                         })
         self.drl_config['environment']['env'] = BaseEnsembleSurrogateEnv 
         
+        rollout_config = self.drl_config.get('rollouts', {})
+        resource_config = self.drl_config.get('resources', {})
+        
         # prep the config object
         drl_config_obj = (drl_config_obj
                             .rl_module(_enable_rl_module_api=False)
@@ -110,6 +113,8 @@ class DynaSINDy(BaseDynaSINDy):
                             .training(**self.drl_config['training'],
                                       _enable_learner_api=False)
                             .evaluation(**self.drl_config['evaluation'])
+                            .rollouts(**rollout_config)
+                            .resources(**resource_config)
                         )
         
         # configure model architecture

@@ -535,7 +535,7 @@ class EnsembleNetDynamicsModel(BaseDynamicsModel):
         '''EXPERIMENTAL'''
         
         with open(save_path, 'wb') as f:
-            pickle.dump(self, self.get_coef_list())
+            pickle.dump(self.get_coef_list(), f)
     
     def load(self, load_path):
         '''EXPERIMENTAL'''

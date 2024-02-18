@@ -40,7 +40,7 @@ def dyna_sindy(config):
         
         # grab the iteration to make sure we _probably_ are checkpointing correctly again...? 
         start_iter = check_dict['epoch'] + 1
-        print('\n!!! LOADING !!!', start_iter, session.get_trial_id(), checkpoint_dir, algo_dir)
+        # print('\n!!! LOADING !!!', start_iter, session.get_trial_id(), checkpoint_dir, algo_dir)
 
         
     # setup the dynamics, reward, DRL algo push weights to surrogate
@@ -63,7 +63,7 @@ def dyna_sindy(config):
                     'mean_len': 0}
     
     for n_iter in range(start_iter, train_iterations):
-        print('\n!!!n_iter!!', n_iter, session.get_trial_id())
+        # print('\n!!!n_iter!!', n_iter, session.get_trial_id())
         checkpoint = None
         train_results = dyna.train_algo()
         
@@ -97,7 +97,7 @@ def dyna_sindy(config):
             collect_dict['mean_len'] = np.mean([len(obs) for obs in trajs_obs]) 
             
         # Checkpoint (ideally after the latest collection)
-        if ((n_iter % ckpt_freq) == ckpt_freq - 1) and (n_iter!=0):
+        if ((n_iter % ckpt_freq) == ckpt_freq - 1):
             
             check_dict = dyna.save_checkpoint(ckpt_num=n_iter, 
                                               save_dir = session.get_trial_dir(),
@@ -139,10 +139,23 @@ if __name__ == '__main__':
     
     from sindy_rl.refactor.policy import RandomPolicy
     from sindy_rl import _parent_dir
-    
+    filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/config_templates/dyna_cylinder_baseline.yml'
+    # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/config_templates/dyna_cylinder_test.yml'
+    # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/config_templates/dyna_pinball/Re=120_lift_new_params.yml'    
+    # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/config_templates/dyna_pinball/Re=120_square_new_params.yml'
+    # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/config_templates/dyna_pinball/Re=100_lift_new_params.yml'
+    # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/config_templates/dyna_pinball/Re=100_square_new_params.yml'
+    # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/config_templates/dyna_pinball/Re=30_square_new_params.yml'
+    # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/config_templates/dyna_pinball/Re=30_lift_new_params.yml'
+    # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/config_templates/dyna_pinball_baseline_debug.yml'
+    # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/dyna_pinball_test.yml'
+    # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/dyna_pinball_baseline.yml'
+    # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/dyna_pinball_baseline_debug.yml'
+    # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/dyna_cylinder_baseline.yml'
     # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/dyna_cylinder_test.yml'
     # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/dyna_config_cart_nn_test.yml'
-    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/dyna_config_cart_test.yml'
+    # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/dyna_config_cart_test.yml'
+    # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/dyna_config_cart_lin_test.yml'
     # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/dyna_config_swimmer_test.yml'
     
     with open(filename, 'r') as f:

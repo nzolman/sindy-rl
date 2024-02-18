@@ -18,9 +18,13 @@ if __name__ == '__main__':
     
     from sindy_rl import _parent_dir
     
-    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_dm_config_test.yml'
+    # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_dm_config_test.yml'
     # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_swimmer_config_test.yml'
+    # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_swimmer_config_bounds_test.yml'
     # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_config.yml'
+    # filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/baseline_dm_multi_test.yml'
+    filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/baseline_cylinder_config_test.yml'
+
     with open(filename, 'r') as f:
         config = yaml.load(f, Loader=yaml.SafeLoader)
     
@@ -73,6 +77,7 @@ if __name__ == '__main__':
                          .training(**drl_config['training'],
                                    _enable_learner_api=False)
                          .evaluation(**drl_config['evaluation'])
+                         .rollouts(**drl_config['rollouts'])
                         )
     
     model_config = drl_default_config.model

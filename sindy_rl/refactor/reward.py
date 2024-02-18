@@ -209,8 +209,9 @@ class EnsembleSparseRewardModel(BaseRewardModel):
             X_tmp = np.concatenate([np.array(x), np.array(u)], axis=-1)
         else:
             X_tmp = x
+        X_tmp = self.feature_library.reshape_samples_to_spatial_grid(X_tmp)
         ThetaX = self.feature_library.transform(X_tmp)
-        return(ThetaX @ self.optimizer.coef_.T)[0]
+        return (ThetaX @ self.optimizer.coef_.T)[0]
     
     def print(self, input_features=None, precision=3):
         '''

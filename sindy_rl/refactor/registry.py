@@ -7,7 +7,7 @@ from sindy_rl.refactor.swimmer import SwimmerWithBounds, SwimmerWithBoundsClassi
 from sindy_rl.refactor.reward_fns import cart_reward
 
 try: 
-    from sindy_rl.refactor.hydroenv import CylinderLiftEnv
+    from sindy_rl.refactor.hydroenv import CylinderLiftEnv, PinballLiftEnv, CylinderWrapper
 except ImportError:
     warnings.warn('Hydrogym is not installed!')
     
@@ -26,3 +26,4 @@ class SwimmerWrapper(SwimmerEnv):
     def __init__(self, config=None):
         env_config = config or {}
         super().__init__(**env_config)
+        
