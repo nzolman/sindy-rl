@@ -1,6 +1,6 @@
-exp_dir: mbrl_nn
+exp_dir: cart-swingup
 n_train_iter: 40000
-dyn_fit_freq: 20
+dyn_fit_freq: 40
 fcnet_hiddens: [64, 64]
 # use_pbt: True
 
@@ -14,7 +14,7 @@ real_env:
       frame_skip: 1
       from_pixels: False
       task_kwargs:
-
+        time_limit: 10 # DEFAULT IS 10!
 drl:
   class: PPO
   config:
@@ -38,6 +38,7 @@ drl:
           frame_skip: 1
           from_pixels: False
           task_kwargs:
+            time_limit: 10 # DEFAULT IS 10!
         init_real_on_start: True
         use_real_env: False
         ensemble_modes: 
@@ -68,9 +69,10 @@ drl:
             task_name: "swingup"
             from_pixels: False
             task_kwargs:
+              time_limit: 10 # DEFAULT IS 10!
         explore: False 
-      evaluation_interval: 5
-      evaluation_duration: 1
+      evaluation_interval: 1
+      evaluation_duration: 5
       evaluation_duration_unit: "episodes"
       always_attach_evaluation_results: True
 
@@ -82,7 +84,7 @@ off_policy_buffer:
   init: 
     type: collect
     kwargs: 
-      n_steps: 16000 # 12000
+      n_steps: 8000 # 12000
       n_steps_reset: 1000
       # seed: 0 # TO-DO: set seed in dmc env
 
@@ -113,15 +115,14 @@ rew_model:
   class: FunctionalRewardModel
   config: 
     name: cart_reward
-    
 
 ray_config:
     run_config:
-        name: "dmc-cartpole_freq=20_len=1k_coll=16k-inf_ens=mean-5_epoch=50"
+        name: "dyna-nn_freq=40_len=1000_coll=15k-inf_ens=mean-5_epoch=50_steps=1000"
         stop:
             # timesteps_total
             num_env_steps_sampled: 1.0e+7
         log_to_file: True 
     tune_config:
         num_samples: 20 # number of sample trials to run
-    checkpoint_freq: 25
+    checkpoint_freq: 10

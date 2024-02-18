@@ -1,0 +1,181 @@
+exp_dir: pinball_new
+n_train_iter: 40000
+dyn_fit_freq: 25
+fcnet_hiddens: [64, 64]
+use_pbt: False
+
+# used for rolling out new on-policy data for 
+# dynamics fitting
+real_env:
+  class: PinballLiftEnv
+  config: 
+      hydro_config:
+        flow: 'square'
+        flow_config:
+          actuator_integration: 'implicit'
+          Re: 100
+          mesh: 'fine'
+          restart:  '/home/firedrake/sindy-rl/data/hydro/pinball/2024-01-20_chaos/Re=100_dt=1e-2/snapshots/no_control_50000.ckpt'
+        solver_config:
+            dt: 5.0e-3
+      n_skip_on_reset: 5
+      control_freq: 20
+      max_episode_steps: 300
+
+
+drl:
+  class: PPO
+  config:
+    training: 
+      # lr_schedule: [[0, 3.0e-4], [10000000, 3.0e-9]]
+      gamma: 0.99
+      lr: 3.0e-4
+      lambda_: 0.95
+      vf_loss_coeff: 0.5
+      vf_clip_param: 0.2
+      clip_param: 0.2
+      grad_clip: 0.5
+    environment:
+      env: 
+      env_config:
+        init_real_on_start: False
+        reset_from_buffer: True
+        max_episode_steps: 300
+        real_env_class: PinballLiftEnv
+        real_env_config: 
+            hydro_config:
+              flow: 'square'
+              flow_config:
+                actuator_integration: 'implicit'
+                Re: 100
+                mesh: 'fine'
+                restart: '/home/firedrake/sindy-rl/data/hydro/pinball/2024-01-20_chaos/Re=100_dt=1e-2/snapshots/no_control_50000.ckpt'
+              solver_config:
+                  dt: 5.0e-3
+            n_skip_on_reset: 5
+            control_freq: 20
+            max_episode_steps: 300
+        ensemble_modes: 
+          dyn: mean
+          rew: median
+        init_weights: True
+        act_dim: 1
+        obs_dim: 6
+        act_bounds: 
+          - [-1.5707963267948966, 1.5707963267948966]
+        obs_bounds: 
+          - [-10, 10]
+          - [-10, 10]
+          - [-10, 10]
+          - [-200, 200]
+          - [-200, 200]
+          - [-200, 200]
+    framework: torch
+    evaluation: 
+      evaluation_interval: # None
+
+
+off_policy_buffer:
+  config:
+    max_traj:
+    max_samples:
+  init: 
+    type: file
+    kwargs: 
+      fname: '/local/nzolman/sindy-rl/data/hydro/tmp_pinball/2024-01-23_tau_icm/Re=100_dt=5e-3/control/min_sq/dt=5e-3_10hz.pkl'
+
+
+on_policy_buffer:
+  config:
+    max_traj: 
+    max_samples: 3000 # 4000
+  collect:
+    n_steps: 200
+    n_steps_reset: 300
+
+
+dynamics_model:
+  class: EnsembleSINDyDynamicsModel
+  config:
+    'dt': 1
+    'discrete': True 
+    'optimizer': 
+      'base_optimizer':
+        'name': 'STLSQ'
+        'kwargs': 
+          'alpha':   1.0e-4 #5.0e-5
+          'threshold': 1.0e-3 #1.0e-2
+      'ensemble':
+        'bagging': True
+        'library_ensemble': True
+        'n_models': 20
+    'feature_library': 
+      name: affine
+      kwargs:
+        poly_deg: 2
+        n_state: 6
+        n_control: 1
+        poly_int: False # True
+        tensor: False
+      # name: PolynomialLibrary
+      # kwargs:
+      #   degree: 3
+      #   include_bias: False
+      #   include_interaction: False
+
+
+rew_model:
+  class: EnsembleSparseRewardModel
+  config:
+    'use_control': True
+    'optimizer': 
+        'base_optimizer':
+            'name': 'STLSQ'
+            'kwargs': 
+                'alpha':   5.0e-5
+                'threshold': 1.0e-4
+        'ensemble':
+            'bagging': True
+            'library_ensemble': True
+            'n_models': 20
+    'feature_library': 
+        name: PolynomialLibrary
+        kwargs:
+            degree: 2
+            include_bias: True
+            include_interaction: True
+
+
+ray_config:
+    run_config:
+        name: "dyna_pinball_refit=25_on-collect=200_Re=100_square_new-params"
+        stop:
+            # timesteps_total
+            num_env_steps_sampled: 5.0e+6
+        log_to_file: True 
+    tune_config:
+        num_samples: 20 # number of sample trials to run
+    checkpoint_freq: 10
+
+
+# pbt_config:
+#   mode: "max"
+#   # metric: "evaluation/episode_reward_mean"
+#   # metric: "traj_buffer/on_policy_ep_mean_rew"
+#   metric: "dyn_collect/mean_rew"
+#   time_attr: "training_iteration"
+#   perturbation_interval: 50
+#   resample_probability: 0.25
+#   quantile_fraction: 0.25
+#   synch: True
+
+#   hyperparam_mutations:
+#     drl/config/training/lr: 
+#       search_class: choice
+#       search_space: [[1.0e-6, 5.0e-6, 1.0e-5, 5.0e-5, 1.0e-4, 5.0e-4, 1.0e-3, 5.0e-3]]
+#     drl/config/training/lambda_: 
+#       search_class: choice
+#       search_space: [[0.9, 0.95, 0.99, 0.999, 0.9999, 1.0]]
+#     drl/config/training/gamma: 
+#       search_class: choice
+#       search_space: [[0.9, 0.95, 0.99, 0.999, 0.9999, 1.0]]
