@@ -29,7 +29,8 @@ def make_no_control_checkpoints(save_dir,
                                 n_steps=10000, 
                                 render_freq=1000,
                                 Re=100,
-                                dt=1e-2):
+                                dt=1e-2,
+                               make_plot=False):
     '''
     NOTE: Uses the Flow Env API, not the surrogate cylinder!
     '''
@@ -53,14 +54,16 @@ def make_no_control_checkpoints(save_dir,
                         n_steps=n_steps, 
                         render_freq=render_freq,
                         dir_name=save_dir,
-                        fname = 'no_control_{:05d}')
+                        fname = 'no_control_{:05d}',
+                        make_plot = make_plot)
     return env
 
 def produce_checkpoints(env, 
                         n_steps, 
                         dir_name=None, 
                         fname='no_control_{:05d}',
-                        render_freq=1000):
+                        render_freq=1000,
+                        make_plot = False):
     
     os.makedirs(dir_name, exist_ok=True)
     
@@ -68,9 +71,10 @@ def produce_checkpoints(env,
         action = 0
         env.step(action)
         if (i % render_freq) == (render_freq -1):
-            save_plot(env, idx=i, 
-                    fname=fname + '.png', 
-                    dir_name=dir_name)
+            if make_plot:
+                save_plot(env, idx=i, 
+                        fname=fname + '.png', 
+                        dir_name=dir_name)
             ckpt_name = os.path.join(dir_name, fname + '.ckpt').format(i+1)
             env.flow.save_checkpoint(ckpt_name)
     print('done.')
@@ -79,14 +83,17 @@ def produce_checkpoints(env,
 if __name__ == '__main__':
     _RE = 100
     _DT = 1e-3
+    _MESH = 'medium'
+    _DATE = '2023-12-13'
     save_dir = os.path.join(_parent_dir, 
                             'data/hydro/cylinder/', 
-                            f'2023-10-02_medium/Re={_RE}_dt=1e-3/snapshots')
+                            f'{_DATE}_{_MESH}/Re={_RE}_dt=1e-3/snapshots')
     
     make_no_control_checkpoints(save_dir=save_dir, 
-                                mesh='medium',
-                                n_steps=int(1e5),
+                                mesh=_MESH,
+                                n_steps=int(1e6),
                                 Re=_RE,
                                 dt=_DT,
-                                render_freq=2500
+                                render_freq=2500,
+                                make_plot=False
                                 )

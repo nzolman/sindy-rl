@@ -1,6 +1,3 @@
-# Example Usage: 
-# mpiexec -np 12 python gen_pinball_checkpoints.py
-
 import os
 os.environ['OMP_NUM_THREADS']='1'
 from tqdm import tqdm
@@ -17,7 +14,7 @@ from sindy_rl.refactor.env import rollout_env
 from sindy_rl.refactor.traj_buffer import BaseTrajectoryBuffer
 
 
-def save_plot(env, idx, fname='no_control_{:07d}.png', dir_name=None):
+def save_plot(env, idx, fname='no_control_{:05d}.png', dir_name=None):
     fig, axes = plt.subplots(1, 1, figsize=(10, 5))
     im = env.render(axes=axes)
     axes.set_title(f'Mesh Step: {idx} Timestep: {env.solver.t}')
@@ -60,14 +57,14 @@ def make_no_control_checkpoints(save_dir,
                         render_freq=render_freq,
                         dir_name=save_dir,
                         prev_idx=prev_idx,
-                        fname = 'no_control_{:07d}')
+                        fname = 'no_control_{:05d}')
     return env
 
 def produce_checkpoints(env, 
                         n_steps, 
                         dir_name=None, 
                         prev_idx=0, 
-                        fname='no_control_{:07d}',
+                        fname='no_control_{:05d}',
                         render_freq=1000):
     
     os.makedirs(dir_name, exist_ok=True)
@@ -98,7 +95,7 @@ def produce_checkpoints(env,
     print('done.')
     
     
-def excite_instability(env, magnitude=0.1, freq=10, n_steps = 1000, save_dir = None):
+def excite_instability(env, magnitude=0.1, freq=10, n_steps = 1000):
     policy =  RandomPolicy(env.action_space)
     policy.magnitude=magnitude
     obs_list=[]
@@ -108,20 +105,9 @@ def excite_instability(env, magnitude=0.1, freq=10, n_steps = 1000, save_dir = N
         if i % freq == 0: 
             act = policy.compute_action(None)
             
-            # let's only actuate the front  cylinder
-            act[1] = 0.0
-            act[2] = 0.0 #-1.0 * act[2]
-        
-        if i % 1000 ==0 : 
-            fname='no_control_{:07d}'
-            save_plot(
-                        env, 
-                        idx=i, 
-                        fname=fname + '.png', 
-                        dir_name=save_dir
-                    )
-            ckpt_name = os.path.join(save_dir, fname + '.ckpt').format(i+1)
-            env.flow.save_checkpoint(ckpt_name)
+            # let's only actuate the back two cylinders with antisymmetric control
+            act[0] = 0.0
+            act[1] = -1.0 * act[2]
 
         res = env.step(act)
         obs_list.append(res[0])
@@ -138,7 +124,6 @@ def instability_check(save_dir,
     '''
     NOTE: Uses the Flow Env API
     '''
-
     
     os.makedirs(save_dir, exist_ok=True)
     
@@ -172,50 +157,25 @@ def instability_check(save_dir,
     
 
 if __name__ == '__main__':
-    _RE = 120
-    _DT = 1e-3
-    
-    # prev_checkpoint = os.path.join(_parent_dir, 
-    #                                'data/hydro/pinball/2023-10-14_fine_instability/Re=30_dt=1e-3/snapshots/no_control_400000.ckpt'
-    #                               )
-    prev_checkpoint = os.path.join('/local/nzolman/sindy-rl/data/hydro/tmp_pinball/',
-                            f'2024-02-05_fixed_center/Re={_RE}_dt=1e-3/instability/instability.ckpt')
-    
-    # prev_idx = int(4e5)
-    prev_idx = 0
-    
-    # save_dir = os.path.join(_parent_dir, 
-    #                         'data/hydro/pinball/', 
-    #                         f'2023-10-14_fine_instability/Re={_RE}_dt=1e-3/snapshots'
-    #                        )
-    
-#     save_dir = os.path.join('/local/nzolman/sindy-rl/data/hydro/tmp_pinball/',
-#                             f'2024-02-05_fixed_center/Re={_RE}_dt=1e-3/snapshots2')
-    
-#     make_no_control_checkpoints(save_dir=save_dir, 
-#                                 mesh='fine',
-#                                 n_steps=int(5e5),
-#                                 Re=_RE,
-#                                 dt=_DT,
-#                                 prev_checkpoint=prev_checkpoint,
-#                                 prev_idx=prev_idx,
-#                                 render_freq=2500
-#                                 )
-    # produce instability
+    _RE = 140
+    _DT = 1e-2
+
     prev_checkpoint = os.path.join(_parent_dir, 
-                                   'data/hydro/pinball/120_fine_steady.h5'
-        # '/local/nzolman/sindy-rl/data/hydro/tmp_pinball/',
-        #                             f'2024-02-05_fixed_center/Re={_RE}_dt=1e-3/snapshots',
-        #                            'no_control_200000.ckpt'
+                                   # 'data/hydro/pinball/2023-10-14_fine_instability/Re=30_dt=1e-3/snapshots/no_control_500000.ckpt'
+                                   'data/hydro/pinball/2024-01-20_chaos/Re=120_dt=1e-2/snapshots/no_control_25000.ckpt'
                                   )
     
-    save_dir = os.path.join('/local/nzolman/sindy-rl/data/hydro/tmp_pinball/',
-                            f'2024-02-05_fixed_center/Re={_RE}_dt=1e-3/instability')
 
-    instability_kwargs = dict(magnitude=0.1, freq=100, n_steps = 50000, save_dir=save_dir)
-    instability_check(save_dir, 
-                    mesh='fine', 
-                    Re=_RE,
-                    prev_checkpoint=prev_checkpoint,
-                    instability_kwargs=instability_kwargs,
-                    dt=_DT)
+    save_dir = os.path.join(_parent_dir, 
+                            'data/hydro/pinball/', 
+                            f'2024-01-20_chaos/Re={_RE}_dt=1e-2/snapshots')
+
+    make_no_control_checkpoints(save_dir=save_dir, 
+                                mesh='fine',
+                                n_steps=int(2.5e4),
+                                Re=_RE,
+                                dt=_DT,
+                                prev_checkpoint=prev_checkpoint,
+                                prev_idx=0,
+                                render_freq=250
+                                )
