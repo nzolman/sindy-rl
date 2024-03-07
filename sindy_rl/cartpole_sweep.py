@@ -1,3 +1,5 @@
+'''Used for generating experiments for Appendix C.1.1 "On-Policy Collection Study"'''
+
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -8,6 +10,7 @@ from ray.rllib.algorithms.registry import ALGORITHMS as rllib_algos
 from ray.tune.schedulers import PopulationBasedTraining
 from ray import tune, air
 
+from sindy_rl import _parent_dir
 from sindy_rl.pbt_dyna import dyna_sindy, explore
 
 
@@ -28,15 +31,11 @@ def update_config(config):
     
 if __name__ == '__main__': 
     import yaml
-    import logging
     import ray
-    
     from pprint import pprint
     
     from sindy_rl.policy import RandomPolicy
-    from sindy_rl import _parent_dir
-    
-    filename = '/home/nzolman/projects/sindy-rl/sindy_rl/refactor/dyna_config_cart_test.yml'
+    filename = os.path.join(_parent_dir, 'config_templates', 'dyna_config_cart.yml')
     
     with open(filename, 'r') as f:
         dyna_config = yaml.load(f, Loader=yaml.SafeLoader)
@@ -44,14 +43,14 @@ if __name__ == '__main__':
     dyna_config = update_config(dyna_config)
     pprint(dyna_config)
 
-    LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results',dyna_config['exp_dir'])
+    LOCAL_DIR =  os.path.join(_parent_dir, 'ray_results', dyna_config['exp_dir'])
     
     # Setup logger
     logging.basicConfig()
     logger = logging.getLogger('dyna-sindy')
     logger.setLevel(logging.INFO)
 
-    # TO-DO: find a better place to automate this
+    # Manually insert off-policy config
     n_control = dyna_config['drl']['config']['environment']['env_config']['act_dim']
     dyna_config['off_policy_pi'] = RandomPolicy(low=-1*np.ones(n_control), 
                                                 high = np.ones(n_control), 
