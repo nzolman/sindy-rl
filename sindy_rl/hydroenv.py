@@ -6,8 +6,13 @@ import firedrake as fd
 import matplotlib.pyplot as plt
 
 
-# TO-DO: get rid of all mentions of "real"
 class HydroEnvWrapper(hgym.FlowEnv):
+    '''
+    Wrapper for HydroEnv class to allow for filtering observations
+    and allowing the agent to submit actions less frequently than the
+    solver dt. In particular, allows us to provide 1st-order control 
+    that acts as a linear interpolation between agent interactions.
+    '''
     def __init__(self, env_config=None):
         '''
         Schema can be kind of confusing
@@ -20,9 +25,6 @@ class HydroEnvWrapper(hgym.FlowEnv):
           n_skip_on_reset: 50       (how many inner_steps to provide a null action after a reset)
           max_episode_steps: 1000   (how many times to execute an outer step before terminating)
           use_filter: True          (whether to use a filtered observation)
-          
-          TO-DO: time_delay_stack: 5    (dimension of TD embedding)
-          TO-DO: Include C_L_dot
           
         Attributes:
             hydro_state, prev_hydro state: 
@@ -52,7 +54,7 @@ class HydroEnvWrapper(hgym.FlowEnv):
 
     def real_step(self, action):
         '''
-        Take a step in the hydrogym environment
+        Take a step in the hydrogym environment at the solver dt.
         '''
         # keep track of previous state
         self.prev_hydro_state = self.hydro_state
@@ -78,10 +80,10 @@ class HydroEnvWrapper(hgym.FlowEnv):
             return False
 
     def step(self, action):
+        '''
+        We wrap the Hydrogym step function by providing many intermediate steps
+        '''
         self.action = action        
-        # Apply inner step 
-        #  `self.control_freq` number of times with constant action
-        #  i.e. "zero-hold" control
         
         # accumulate rewards from inner steps
         tot_rew = 0
@@ -108,7 +110,10 @@ class HydroEnvWrapper(hgym.FlowEnv):
 
     def reset(self, seed=0, options=None, **reset_kwargs):
         '''
-        TO DO: Do _something_ with `seed`!
+        Resetting the environment just reinitializes it to the loaded checkpoint.
+            If n_skip_on_reset is not 0, then this runs a fixed number of inner steps
+            with null control at the beginning of the episode. This is useful to warm start
+            a filter and smoothing out the flow field if there are any weird perturbations. 
         '''
         # extract hydrogym state from FlowEnv reset
         self.hydro_state = np.array(super(HydroEnvWrapper, self).reset(**reset_kwargs))
@@ -134,7 +139,8 @@ class HydroEnvWrapper(hgym.FlowEnv):
 
 class CylinderLiftEnv(HydroEnvWrapper):
     '''
-    Just modeling C_L and dC_L
+    A wrapper for the Hydrogym Cylinder env that just provides 
+    (C_L, \dot C_L ) as an observation.
     '''
     def __init__(self, env_config=None):
         config = env_config.copy()
@@ -199,6 +205,7 @@ class CylinderLiftEnv(HydroEnvWrapper):
         return self.state
 
 class CylinderWrapper(CylinderLiftEnv):
+    '''Additional wrapper needed since hydrogym not compliant with latest gymnasium'''
     def __init__(self, env_config=None):
         super().__init__(env_config)
         
@@ -213,197 +220,3 @@ class CylinderWrapper(CylinderLiftEnv):
     def reset(self, seed=0, options = None, **kwargs):
         obs = super().reset()
         return obs, {}
-            
-
-
-class PinballFlowSq(hgym.Pinball):
-    '''A pinball with sum of squares objective'''
-    def evaluate_objective(self, q=None):
-        CL, CD = self.compute_forces(q=q)
-        CD = np.array(CD)
-        return np.sum(CD**2)
-    
-    
-# _REF_PIN_CD = np.array([1.45064411, 1.56573163,1.56674967])
-
-_REF_PIN_CD = np.array([1.45, 1.57,1.57])
-_REF_PIN_CL = np.array([0.0, 1.0, -1.0])
-
-class PinballFlowRefSq(hgym.Pinball):
-    '''A pinball with sum of squares objective'''
-    def evaluate_objective(self, q=None):
-        CL, CD = self.compute_forces(q=q)
-        diff_CD = np.array(CD) - _REF_PIN_CD
-        return np.sum(diff_CD**2)
-
-
-class PinballLiftTrack(hgym.Pinball):
-    '''A pinball with sum of squares objective'''
-    def evaluate_objective(self, q=None):
-        CL, CD = self.compute_forces(q=q)
-        diff_CL = np.array(CL) - _REF_PIN_CL
-        return np.sum(diff_CL**2)
-    
-def get_pinball_flow(flow):
-    flow_dict = {'classic': hgym.Pinball,
-                 'square': PinballFlowSq,
-                 'track': PinballFlowRefSq,
-                 'lift_track': PinballLiftTrack}
-
-    if flow in flow_dict.keys():
-        return flow_dict[flow]
-    elif issubclass(flow, hgym.Pinball):
-        return flow
-    else:
-        raise TypeError(f'invalid flow type {flow}')
-
-class PinballLiftEnv(HydroEnvWrapper):
-    '''
-    Just modeling C_L and dC_L
-    '''
-    def __init__(self, env_config=None):
-        config = env_config.copy()
-        
-        
-        default_flow_config =  {
-            "flow": PinballFlowSq,
-            "solver": hgym.IPCS,
-            "flow_config": {
-                'mesh': 'fine',
-                'actuator_integration': 'implicit',
-                'Re': 30
-            }
-        }
-
-        flow_config = config.get('hydro_config', {})
-        default_flow_config.update(flow_config)
-        
-        # grab flow class if passed a string
-        default_flow_config['flow'] = get_pinball_flow(default_flow_config['flow'])
-        
-        config['hydro_config'] = default_flow_config
-        
-        self.obs_clip_val = 100
-        self.MAX_TORQUE = config.get('max_torque', 0.5*np.pi)
-        
-        super(PinballLiftEnv, self).__init__(config)
-        self._init_augmented_obs()
-        self._init_action_space()
-        
-    def _init_augmented_obs(self):
-        obs_dim = 6 # CL and CL_dot
-        self.observation_space = Box( 
-                                     low=-np.inf,
-                                     high=np.inf,
-                                     shape=(obs_dim,),
-                                     dtype=PDEBase.ScalarType,
-                                     )
-        
-    def _init_action_space(self):
-        act_dim = 1 # Anti-symmetric acutation on the back cylinders
-        self.action_space = Box(low = -self.MAX_TORQUE,
-                                high = self.MAX_TORQUE,
-                                shape = (act_dim, ),
-                                dtype=self.flow.ScalarType,
-                                )
-        
-
-    def get_CL_dot(self): 
-        # TO-DO: improve the quality of the derivative
-        return (self.hydro_state - self.prev_hydro_state)[0:3]/self.solver.dt
-    
-    def clip_obs(self, state):
-        '''
-        Clips Observation between bounds
-        '''
-        return np.clip(state, -self.obs_clip_val, self.obs_clip_val)
-    
-    def build_augmented_obs(self):
-        '''
-        Builds augmented obs for the REAL environment
-        '''
-        obs = [*self.hydro_state]
-        obs = obs[:3]
-        obs += list(self.get_CL_dot())
-        return np.array(obs)
-
-    def step(self, action):
-        '''
-        Take step in Pinball environment with zero control on the front cylinder
-        and antisymmetric control on the back cylinder, i.e. [0, u, -u]
-        
-        Assuming action is np.array! 
-        '''
-        
-        action = np.array([0, action[0], -1.0 * action[0]])
-        
-        self.state, rew, done, info = super(PinballLiftEnv, self).step(action)
-        self.state = self.build_augmented_obs()
-        
-        if self.obs_clip_val:
-            self.state = self.clip_obs(self.state)
-
-        return self.state, rew, done, info 
-    
-    def reset(self, **reset_kwargs):
-        self.state = super(PinballLiftEnv, self).reset(**reset_kwargs)
-        self.state = self.build_augmented_obs()
-        self.prev_action = np.zeros(3)
-        return self.state    
-    
-
-class PinballTwoLiftEnv(PinballLiftEnv):
-    '''
-    Just modeling C_L and dC_L
-    '''
-    def __init__(self, env_config=None):
-        super().__init__(env_config)
-        
-    def _init_action_space(self):
-        act_dim = 2 # Anti-symmetric acutation on the back cylinders
-        self.action_space = Box(low = -self.MAX_TORQUE,
-                                high = self.MAX_TORQUE,
-                                shape = (act_dim, ),
-                                dtype=self.flow.ScalarType,
-                                )
-
-    def step(self, action):
-        '''
-        Take step in Pinball environment with zero control on the front cylinder
-        and antisymmetric control on the back cylinder, i.e. [0, u, -u]
-        
-        Assuming action is np.array! 
-        '''
-        
-        action = np.array([0, action[0], action[1]])
-        
-        self.state, rew, done, info = super(PinballLiftEnv, self).step(action)
-        self.state = self.build_augmented_obs()
-        
-        if self.obs_clip_val:
-            self.state = self.clip_obs(self.state)
-
-        return self.state, rew, done, info 
-    
-  
-    
-
-if __name__ == '__main__': 
-    flow_env_config = {
-        "flow": hgym.Cylinder,
-        "solver": hgym.IPCS,
-        "flow_config": {
-            'mesh': 'fine' # coarse, medium, fine
-        }
-    }
-    
-    env_config = {
-            'hydro_config': flow_env_config,
-            'dyn_model': None         
-    }
-    env = HydroEnvWrapper(env_config)
-    obs = env.reset()
-    print(obs)
-    for i in range(10):
-        print(env.step(0.0))
-    
