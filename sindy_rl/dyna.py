@@ -1,13 +1,9 @@
 import logging
 import os
-import pickle
 import numpy as np
 import time
-import yaml
 
-from ray.rllib.algorithms.algorithm import Algorithm
 from ray.rllib.algorithms.registry import ALGORITHMS as rllib_algos
-from gymnasium.wrappers import StepAPICompatibility
 from sindy_rl import dynamics, reward
 
 from sindy_rl import registry
@@ -24,6 +20,7 @@ from sindy_rl.ray_utils import update_dyn_and_rew_models
 #     - Open up the config to include a class name
 
 class BaseDynaSINDy:
+    '''Base class outlining dyna API'''
     def __init__(self, config, logger = None):
         if logger is None:
             
@@ -67,8 +64,11 @@ class BaseDynaSINDy:
     
 
 class DynaSINDy(BaseDynaSINDy):
+    '''Main interface for Dyna-style SINDy-RL'''
     def __init__(self, config, logger=None, init_drl=True):
         super().__init__(config=config, logger=logger)
+        
+        # separate different dictionary configuration
         self.off_pi_buffer_config = config.get('off_policy_buffer')
         self.on_pi_buffer_config = config.get('on_policy_buffer')
         self.dyn_config = self.config['dynamics_model']
@@ -76,10 +76,10 @@ class DynaSINDy(BaseDynaSINDy):
         self.drl_config = self.config['drl']['config']
         self.n_dyn_updates = 0
         
-        # whether to provide the buffer to the surrogate environment for
-        # resetting
+        # whether to provide the buffer to the surrogate environment for resetting
         self.reset_from_buffer = config['drl']['config']['environment']['env_config'].get('reset_from_buffer', False)
         
+        # initialize components
         self._init_real_env()
         self._init_off_policy()
         self._init_data_buffers()
@@ -90,9 +90,11 @@ class DynaSINDy(BaseDynaSINDy):
         
     def _init_drl(self):
         '''Initialize DRL model and on-policy-pi'''
+        
         self.logger.info('Setting up DRL algo...')
         drl_class_name = self.config['drl']['class']
 
+        # currently only support DRL algorithms
         drl_class, drl_config_obj = rllib_algos.get(drl_class_name)()
 
         # ensure the surrogate env has the same dynamics/reward models.
@@ -107,7 +109,7 @@ class DynaSINDy(BaseDynaSINDy):
         rollout_config = self.drl_config.get('rollouts', {})
         resource_config = self.drl_config.get('resources', {})
         
-        # prep the config object
+        # prep the RLlib config object
         drl_config_obj = (drl_config_obj
                             .rl_module(_enable_rl_module_api=False)
                             .environment(**self.drl_config['environment'])
@@ -119,7 +121,6 @@ class DynaSINDy(BaseDynaSINDy):
                         )
         
         # configure model architecture
-        # TO-DO: figure out a better spot for this
         model_config = drl_config_obj.model
         fcnet_hiddens = self.config.get('fcnet_hiddens', [64, 64])
         model_config.update({'fcnet_hiddens': fcnet_hiddens})
@@ -128,25 +129,20 @@ class DynaSINDy(BaseDynaSINDy):
         self.drl_algo = drl_config_obj.build()
         self.on_policy_pi = RLlibPolicyWrapper(self.drl_algo)
         self.logger.info('...DRL algo setup.')
-        
+
     def _init_real_env(self):
-        '''Initiliaze a copy of the real environment'''
+        '''Initiliaze a copy of the real environment for evaluation/on-policy collection'''
         if isinstance(self.config['real_env'], dict):
             env_class = getattr(registry, self.config['real_env']['class'])
             env_config = self.config['real_env']['config']
             self.real_env = env_class(env_config)
         else:
             self.real_env = self.config['real_env']
-        
-        # if self.real_env.use_old_api:
-        # self.real_env = StepAPICompatibility(self.real_env, output_truncation_bool=False)
         self.real_env.reset()
-        # TO-DO: initialize with seed?
         return self.real_env
         
     def _init_off_policy(self):
         '''Initialize the off-policy Policy'''
-        # TO-DO: build this
         self.off_policy_pi = self.config['off_policy_pi']
         
     def _init_dynamics_model(self):
@@ -216,8 +212,6 @@ class DynaSINDy(BaseDynaSINDy):
 
     def save_checkpoint(self, ckpt_num, save_dir):
         # setup directories
-        # TO-DO: ensure this ckpt_num is the right number/format.
-        
         ckpt_dir = os.path.join(save_dir, f'checkpoint_{ckpt_num+1:06}')
         checkpoint = self.drl_algo.save(save_dir)
         
@@ -225,10 +219,10 @@ class DynaSINDy(BaseDynaSINDy):
         rew_path = os.path.join(ckpt_dir, 'rew_model.pkl')
         data_path_on = os.path.join(ckpt_dir,'on-pi_data.pkl')
         data_path_off = os.path.join(ckpt_dir,'off-pi_data.pkl')
-        
+
         self.dynamics_model.save(dyn_path)
         self.rew_model.save(rew_path)
-                
+
         self.on_policy_buffer.save_data(data_path_on)
         self.off_policy_buffer.save_data(data_path_off)
         
@@ -244,33 +238,20 @@ class DynaSINDy(BaseDynaSINDy):
 
     def load_checkpoint(self, check_dict):
         '''
-        Restore dyna algorithm from saved checkpoint
+        Restore dyna algorithm from saved checkpoint.
+        NOTE: this can be a bit buggy with Tune's PBT
         '''
         ckpt_dir = check_dict['checkpoint_dir']
         algo_dir = check_dict['algo_dir']
         
-        dyn_path = os.path.join(ckpt_dir, 'dyn_model.pkl')
-        rew_path = os.path.join(ckpt_dir, 'rew_model.pkl')
-        data_path_on = os.path.join(ckpt_dir,'on-pi_data.pkl')
-        data_path_off = os.path.join(ckpt_dir,'off-pi_data.pkl')
-        
-        # self.dynamics_model.load(dyn_path)
-        # self.rew_model.load(rew_path)
-
-        # self.on_policy_buffer.load_data(data_path_on)
-        # self.off_policy_buffer.load_data(data_path_off)
-
-        # This is probably redundant.
-        # self.fit_dynamics()
-        # self.fit_rew()
         self.dynamics_model = check_dict['dyn_model']
         self.rew_model = check_dict['rew_model']
         self.on_policy_buffer = check_dict['on-policy']
         self.off_policy_buffer = check_dict['off-policy']
         
 
-        # Hacky way to deal with the file not existing immediately...?
-        # Weirdly this seems to work
+        # Hacky way to deal with the file not existing immediately for PBT...
+        # Weirdly this seems to work. 
         n_tries = 12
         dt = 5
         for i in range(n_tries):
@@ -289,6 +270,7 @@ class DynaSINDy(BaseDynaSINDy):
 
     def update_surrogate(self):
         '''Updating surrogate model'''
+        
         self.logger.info('Updating worker weights')
         dyn_weights = self.dynamics_model.get_coef_list()
         
@@ -297,10 +279,11 @@ class DynaSINDy(BaseDynaSINDy):
             rew_weights = self.rew_model.get_coef_list()
             
         self.drl_algo.workers.foreach_worker(update_dyn_and_rew_models(dyn_weights, rew_weights))
-        # TO-DO: FIX LOCATION
         self.n_dyn_updates += 1
 
     def get_buffer_metrics(self):
+        '''Define metrics that are used for Tune reporting, e.g. to tensorboard'''
+
         n_samples_on_pi = self.on_policy_buffer.total_samples()
         n_samples_off_pi = self.off_policy_buffer.total_samples()
         n_traj_on_pi = len(self.on_policy_buffer)
@@ -316,15 +299,15 @@ class DynaSINDy(BaseDynaSINDy):
             on_policy_mean_rew = np.nan
         
         buffer_metrics = {
-            'n_dyn_updates': self.n_dyn_updates,
-            'n_samples': n_samples_on_pi + n_samples_off_pi,
+            'n_dyn_updates': self.n_dyn_updates, # number of dynamics updates
+            'n_samples': n_samples_on_pi + n_samples_off_pi, # current number of samples between the two buffers
             'n_samples_on_pi': n_samples_on_pi,
             'n_sampels_off_pi': n_samples_off_pi,
-            'n_traj': n_traj_on_pi  + n_traj_off_pi,
+            'n_traj': n_traj_on_pi  + n_traj_off_pi, # current number of trajectories between the two buffers
             'n_traj_on_pi': n_traj_on_pi,
             'n_traj_off_pi': n_traj_off_pi,
-            'n_total_real': total_samples,
-            'last_on_policy_ep_rew': last_on_policy_rew,
-            'on_policy_ep_mean_rew': on_policy_mean_rew
+            'n_total_real': total_samples, # total number of samples from the full-order environment
+            'last_on_policy_ep_rew': last_on_policy_rew, # last on-policy episode rewar
+            'on_policy_ep_mean_rew': on_policy_mean_rew # mean on-policy rew (from the current buffer)
         }
         return buffer_metrics
