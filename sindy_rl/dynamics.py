@@ -10,10 +10,9 @@ from torch import nn
 from torch import optim
 from torch.utils.data import DataLoader, Dataset, random_split
 
-import os
 from scipy.integrate import solve_ivp
 
-from sindy_rl.refactor.sindy_utils import build_optimizer, build_feature_library
+from sindy_rl.sindy_utils import build_optimizer, build_feature_library
 from sindy_rl import dynamics_callbacks
 
 class BaseDynamicsModel:
@@ -34,7 +33,6 @@ class EnsembleSINDyDynamicsModel(BaseDynamicsModel):
         of just 1 model. 
     '''
     def __init__(self, config): 
-        # TO DO: BUILD FEATURE LIBRARY AND OPTIMIZER
         self.config = config or {}
         self.dt = self.config.get('dt', 1)
         self.discrete = self.config.get('discrete', True)
@@ -61,9 +59,12 @@ class EnsembleSINDyDynamicsModel(BaseDynamicsModel):
                               feature_library=self.feature_library)
         self.n_models = self.model.optimizer.n_models
         
+        # once initialized, `safe_idx` can be used to determine which members of the 
+        # ensemble can be trusted, since some might blow up quickly in finite time.
         self.safe_idx = None
 
     def reset_safe_list(self):
+        '''Reset this to list all models as safe'''
         self.safe_idx = np.ones(self.n_models, dtype=bool)
         
     def fit(self, observations, actions, **sindy_fit_kwargs):
@@ -258,23 +259,25 @@ class EnsembleSINDyDynamicsModel(BaseDynamicsModel):
         self.model.optimizer.coef_ = self.set_idx_coef_(0)
         
     def save(self, save_path):
-        '''EXPERIMENTAL'''
-        # save_data = {'model': self.model,
-        #              'n_state': self.n_state,
-        #              'n_control': self.n_control
-        #              }
-        
+        '''
+        ~~EXPERIMENTAL~~
+        Save dynamics model as a pickle file
+        '''
         with open(save_path, 'wb') as f:
             pickle.dump(self, f)
     
     def load(self, load_path):
-        '''EXPERIMENTAL'''
+        '''
+        ~~EXPERIMENTAL~~
+        Load dynamics model from a pickle file
+        '''
         
         with open(load_path, 'rb') as f:
             model = pickle.load(f)
             config = model.config
             self.__init__(config)
             
+            # some silly bookkeeping to make pysindy happy
             x_tmp = np.ones((10, model.n_state))
             u_tmp = np.ones((10, model.n_control))
             self.fit([x_tmp], [u_tmp])
@@ -282,17 +285,9 @@ class EnsembleSINDyDynamicsModel(BaseDynamicsModel):
             self.model.optimizer.coef_list = model.optimizer.coef_list
             self.model.optimizer.coef_ = model.optimizer.coef_
         
-        # self.n_state = load_data['n_state']
-        # self.n_control = load_data['n_control']
-        
-        # model = load_data['model']
-        # coef_list = model.optimizer.coef_list
-        # n_models = len(coef_list)
-        # self.n_models = 
-        
 
 class FCNet(nn.Module):
-    '''Fully Connected Neural Network'''
+    '''Simple Torch Fully Connected Neural Network'''
     def __init__(self, n_input, n_output, hidden_size=64):
         self.n_input = n_input
         self.n_output = n_output
@@ -324,6 +319,7 @@ class FCNet(nn.Module):
 
 
 def _reshape_data(obs_trajs, u_trajs, dtype=torch.float32):
+    '''helper function for reshaping data to conform to a similar API to sindy'''
     X_in = [obs_traj[:-1] for obs_traj in obs_trajs]
     X_out = [obs_traj[1:] for obs_traj in obs_trajs]
     U_in = [u_traj[:-1] for u_traj in u_trajs]
@@ -336,6 +332,7 @@ def _reshape_data(obs_trajs, u_trajs, dtype=torch.float32):
     return XU_in, X_out
 
 class TrajDataset(Dataset):
+    '''Helper class for bookkepping the neural network training'''
     def __init__(self, XU, X_out):
         self.XU = XU
         self.X_out = X_out
@@ -454,10 +451,6 @@ class SingleNetDynamicsModel(BaseDynamicsModel):
         return self.model, val_loss, epoch
     
 
-# TO-DO:
-# - Incorporate two modes: mean (of output) or sample
-# - provide individual random seeds
-# - split data
 class EnsembleNetDynamicsModel(BaseDynamicsModel):
     '''
     An ensemble wrapper for `n_models` identical SingleNetDynamicsModel objects.
@@ -477,9 +470,6 @@ class EnsembleNetDynamicsModel(BaseDynamicsModel):
         
         self.ensemble = [SingleNetDynamicsModel(self.single_model_config) for n in range(self.n_models)]
         
-        # TO-DO: figure out if this is necessary? But apply
-        # whatever callback we have from the individual members
-        # in case taking the mean, etc. un-projects the data.
         self.callbacks = self.ensemble[0].callbacks
 
     def split_data(self, X, Y): 
@@ -528,6 +518,7 @@ class EnsembleNetDynamicsModel(BaseDynamicsModel):
         return update
     
     def set_mean_coef_(self, **kwargs):
+        '''Need analogous function to conform to EnsembleSINDyDynamicsModel API'''
         pass
     
     
