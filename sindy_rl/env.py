@@ -2,10 +2,11 @@ import gymnasium
 from gymnasium.spaces.box import Box
 import numpy as np
 import pysindy as ps
-from tqdm import tqdm 
+from tqdm import tqdm
+from sindy_rl import dynamics 
 
-from sindy_rl.refactor import dynamics, reward
-from sindy_rl.refactor import registry
+from sindy_rl import reward
+from sindy_rl import registry
 
 def safe_reset(res):
     '''

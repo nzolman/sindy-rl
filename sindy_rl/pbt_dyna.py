@@ -12,8 +12,8 @@ from ray.air import session, Checkpoint
 # from ray.train import Checkpoint
 from ray.rllib.algorithms.algorithm import Algorithm
 
-from sindy_rl.refactor.dyna import DynaSINDy
-from sindy_rl.refactor.env import rollout_env
+from sindy_rl.dyna import DynaSINDy
+from sindy_rl.env import rollout_env
 
 import tempfile
 
@@ -137,7 +137,7 @@ if __name__ == '__main__':
     
     from pprint import pprint
     
-    from sindy_rl.refactor.policy import RandomPolicy
+    from sindy_rl.policy import RandomPolicy
     from sindy_rl import _parent_dir
     filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/config_templates/dyna_cylinder_baseline.yml'
     # filename = '/home/firedrake/sindy-rl/sindy_rl/refactor/config_templates/dyna_cylinder_test.yml'

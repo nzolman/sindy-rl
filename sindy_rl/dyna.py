@@ -8,12 +8,13 @@ import yaml
 from ray.rllib.algorithms.algorithm import Algorithm
 from ray.rllib.algorithms.registry import ALGORITHMS as rllib_algos
 from gymnasium.wrappers import StepAPICompatibility
+from sindy_rl import dynamics, reward
 
-from sindy_rl.refactor import registry, dynamics, reward
-from sindy_rl.refactor.policy import RLlibPolicyWrapper
-from sindy_rl.refactor.traj_buffer import MaxSamplesBuffer
-from sindy_rl.refactor.env import rollout_env, BaseEnsembleSurrogateEnv
-from sindy_rl.refactor.ray_utils import update_dyn_and_rew_models
+from sindy_rl import registry
+from sindy_rl.policy import RLlibPolicyWrapper
+from sindy_rl.traj_buffer import MaxSamplesBuffer
+from sindy_rl.env import rollout_env, BaseEnsembleSurrogateEnv
+from sindy_rl.ray_utils import update_dyn_and_rew_models
 
 
 #TO DO:

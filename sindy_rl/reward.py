@@ -4,7 +4,7 @@ import pickle
 
 
 from sindy_rl.refactor.sindy_utils import build_optimizer, build_feature_library
-from sindy_rl.refactor import reward_fns
+from sindy_rl import reward_fns
 
 class BaseRewardModel:
     '''

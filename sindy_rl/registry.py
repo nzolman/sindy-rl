@@ -4,10 +4,10 @@ from gymnasium.envs.mujoco.swimmer_v4 import SwimmerEnv
 from ray.rllib.env.wrappers.dm_control_wrapper import DMCEnv
 
 from sindy_rl.refactor.swimmer import SwimmerWithBounds, SwimmerWithBoundsClassic
-from sindy_rl.refactor.reward_fns import cart_reward
+from sindy_rl.reward_fns import cart_reward
 
 try: 
-    from sindy_rl.refactor.hydroenv import CylinderLiftEnv, PinballLiftEnv, CylinderWrapper
+    from sindy_rl.hydroenv import CylinderLiftEnv, PinballLiftEnv, CylinderWrapper
 except ImportError:
     warnings.warn('Hydrogym is not installed!')
     
