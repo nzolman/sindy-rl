@@ -1,7 +1,6 @@
 import gymnasium
 from gymnasium.spaces.box import Box
 import numpy as np
-import pysindy as ps
 from tqdm import tqdm
 from sindy_rl import dynamics 
 
@@ -9,24 +8,21 @@ from sindy_rl import reward
 from sindy_rl import registry
 
 def safe_reset(res):
-    '''
-    A ''safe'' wrapper for dealing with OpenAI gym's refactor.
-    '''
+    '''A ''safe'' wrapper for dealing with OpenAI gym's refactor.'''
     if isinstance(res[-1], dict):
         return res[0]
     else:
         return res
     
 def safe_step(res):
-    '''
-    A ''safe'' wrapper for dealing with OpenAI gym's refactor.
-    '''
+    '''A ''safe'' wrapper for dealing with OpenAI gym's refactor.'''
     if len(res)==5:
         return res[0], res[1], res[2] or res[3], res[4]
     else:
         return res
     
 def replace_with_inf(arr, neg):
+    '''helper function to replace an array with inf. Used for Box bounds'''
     replace_with = np.inf
     if neg:
         replace_with *= -1
@@ -35,7 +31,23 @@ def replace_with_inf(arr, neg):
 
 def rollout_env(env, policy, n_steps, n_steps_reset=np.inf, seed=None, verbose = False, env_callback = None):
     '''
-    returns lists of obs, acts, rews trajectories
+    Step through an environment and produce rollouts.
+    Arguments:
+        env: gymnasium environment
+        policy: sindy_rl.BasePolicy subclass
+            The policy to rollout experience
+        n_steps: int
+            number of steps of experience to rollout
+        n_steps_reset: int
+            number of steps of experience to rollout before reset
+        seed: int
+            environment reset seed 
+        verbose: bool
+            whether to provide tqdm progress bar
+        env_callback: fn(idx, env)
+            optional function that is called after every step
+    Returns:
+        lists of obs, acts, rews trajectories
     '''
     if seed is not None:    
         obs_list = [safe_reset(env.reset(seed=seed))]
@@ -50,12 +62,15 @@ def rollout_env(env, policy, n_steps, n_steps_reset=np.inf, seed=None, verbose =
     trajs_rews = []
 
     for i in tqdm(range(n_steps), disable=not verbose):
+        
+        # collect experience
         action = policy.compute_action(obs_list[-1])
         obs, rew, done, info = safe_step(env.step(action))
         act_list.append(action)
         obs_list.append(obs)
         rew_list.append(rew)
-
+        
+        # handle resets
         if done or len(obs_list) > n_steps_reset:
             obs_list.pop(-1)
             trajs_obs.append(np.array(obs_list))
@@ -66,9 +81,11 @@ def rollout_env(env, policy, n_steps, n_steps_reset=np.inf, seed=None, verbose =
             act_list = []
             rew_list = []
         
+        # env callback
         if env_callback:
             env_callback(i, env)
-            
+    
+    # edge case if never hit reset
     if len(act_list) != 0:
         obs_list.pop(-1)
         trajs_obs.append(np.array(obs_list))
@@ -79,6 +96,9 @@ def rollout_env(env, policy, n_steps, n_steps_reset=np.inf, seed=None, verbose =
 
 class BaseSurrogateEnv(gymnasium.Env):
     '''
+    Base class for a surrogate environment. Essentially wraps real environment 
+    and uses surrogate functions for the dynamics/rewards
+    
     NOTE: original intent of allowing real-env is to be able to 
     use callbacks and/or intialize an evaluation environment
     using RLLib. It was not strictly necessary to use. HOWEVER,
@@ -86,23 +106,23 @@ class BaseSurrogateEnv(gymnasium.Env):
     extremely easy.
     '''
     def __init__(self, config):
+        '''config: dictionray config defining all aspects of the environment'''
         self.config = config
-        self.use_old_api = self.config.get('use_old_api', False)
+        
+        # extract information from the config
+        self.use_old_api = self.config.get('use_old_api', False) # True if using old openai gym API. Would not recommend.
         self.max_episode_steps = self.config.get('max_episode_steps', 1000)
         self.n_episode_steps = 0
         
-        
-        
         self.real_env_class = self.config.get('real_env_class', None)
         self.real_env_config = self.config.get('real_env_config', {})
-        # self.surrogate_config = self.config['surrogate_config']
         self.dynamics_model_config = self.config['dynamics_model_config']
         self.rew_model_config = self.config['rew_model_config']
         self._init_weights = self.config.get('init_weights', False)
         
         # whether to reset the surrogate environment by sampling a buffer
         # of previously collected data. Usually off-policy. The intention
-        # is to make resetting go very fast.
+        # is to make resetting go very fast by bypassing the full-order environment.
         self.reset_from_buffer = self.config.get('reset_from_buffer', False)
         self.buffer_dict = self.config.get('buffer_dict', {})
         
@@ -111,14 +131,19 @@ class BaseSurrogateEnv(gymnasium.Env):
         self.obs = None
         self.action = None
         
+        # whether to initiliaze the real environment.
+        # it is recommended to avoid initializing expensive full-order models
+        # and instead sample initial conditions from a buffer.
         if self.config.get('init_real_on_start', False):
             self.init_real_env()
         
+        # whether to use the real environment instead of the surrogate
+        # can be useful for debugging or evaluating
         if self.config.get('use_real_env', False):
             self.use_real_env = True
-        
     
     def _init_act(self):
+        '''Initialize the action space for the surrogate environment'''
         self.act_dim = self.config['act_dim']
         self.act_bounds = np.array(self.config.get('act_bounds'), dtype=float).T   
         self.act_bounds[0] = replace_with_inf(self.act_bounds[0], neg=True)
@@ -127,6 +152,7 @@ class BaseSurrogateEnv(gymnasium.Env):
                                 high = self.act_bounds[1])
         
     def _init_obs(self):
+        '''Initiliaze the observation space for the surrogate environment'''
         self.obs_dim = self.config['obs_dim']
         self.obs_bounds = np.array(self.config.get('obs_bounds'), dtype=float).T   
         self.obs_bounds[0] = replace_with_inf(self.obs_bounds[0], neg=True)
@@ -138,12 +164,13 @@ class BaseSurrogateEnv(gymnasium.Env):
         
     def _init_dynamics_model(self):
         '''Initialize dynamics model'''
-        # TO DO: Make this more general!
+        
+        # grab dynamics class from sindy_rl.dynamics
         dynamics_class = getattr(dynamics, self.dynamics_model_config['class'])
         self.dynamics_model = dynamics_class(self.dynamics_model_config['config'])
         
-        # TO-DO: This might need to change for the NN model.
         # init weights
+        # fitting is just to make things play nice until the model is actually fit.
         if self._init_weights: 
             x_tmp = np.ones((10, self.obs_dim))
             u_tmp = np.ones((10, self.act_dim))
@@ -152,9 +179,12 @@ class BaseSurrogateEnv(gymnasium.Env):
     def _init_rew_model(self):
         '''Initialize reward model'''
         
+        # grab reward class from sindy_rl.reward
         rew_class = getattr(reward, self.rew_model_config['class'])
         self.rew_model = rew_class(self.rew_model_config['config'])
         
+        # init weights
+        # fitting is just to make things play nice until the model is actually fit.
         if self._init_weights: 
             x_tmp = np.ones((10, self.obs_dim))
             u_tmp = np.ones((10, self.act_dim))
@@ -203,7 +233,7 @@ class BaseSurrogateEnv(gymnasium.Env):
         raise NotImplementedError
     
     def _real_step(self, action):
-        '''TO-DO: Clean this up'''
+        '''Use the full-order environment step'''
         res = self.real_env.step(action)
         if self.use_old_api:
             return safe_step(res)
@@ -216,13 +246,12 @@ class BaseSurrogateEnv(gymnasium.Env):
             return obs, rew, self.is_term(), self.is_trunc(), info 
     
     def step(self, action):
-        '''Steps through the real or surrogate environment'''
+        '''Steps through the full-order or surrogate environment'''
         self.action = action
         self.n_episode_steps +=1
         
         if self.use_real_env:
             return self._real_step(self.action)
-        
         
         next_obs = self.dynamics_model.predict(self.obs, self.action)
         rew = self.rew_model.predict(next_obs, self.action)
