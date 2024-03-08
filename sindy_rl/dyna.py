@@ -13,12 +13,6 @@ from sindy_rl.env import rollout_env, BaseEnsembleSurrogateEnv
 from sindy_rl.ray_utils import update_dyn_and_rew_models
 
 
-#TO DO:
-# [ ] Build off-policy Policy
-# [ ] Docstrings
-# [ ] Generalize beyond EnsembleSINDy dynamics/reward models. 
-#     - Open up the config to include a class name
-
 class BaseDynaSINDy:
     '''Base class outlining dyna API'''
     def __init__(self, config, logger = None):
