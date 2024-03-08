@@ -8,7 +8,7 @@ from sindy_rl import reward_fns
 
 class BaseRewardModel:
     '''
-    Base Class for the reward model
+    Base Class for the reward model, R = \Theta(X,U) \Xi
     '''
     def __init__(self, config):
         raise NotImplementedError
@@ -20,6 +20,7 @@ class BaseRewardModel:
     
     
 class FunctionalRewardModel(BaseRewardModel):
+    '''Reward Model when there is an analytic expression'''
     def __init__(self, config):
         '''
         Attributes:
@@ -45,6 +46,7 @@ class FunctionalRewardModel(BaseRewardModel):
             pickle.dump(self.config, f)
             
     def load(self, load_path):
+        '''Experimental'''
         with open(load_path, 'rb') as f:
             config = pickle.load(f)
         
@@ -58,15 +60,13 @@ class EnsembleSparseRewardModel(BaseRewardModel):
         regression. In theory, this should be compatible with all the
         pysindy optimizers, though not all have been tested. 
         
-    R_i = Theta(X,U) @ Xi_i
+    R = Theta(X,U) @ \Xi
     '''
     def __init__(self, config):
         self.can_update = True
         
         self.config = config
         self.use_control = config.get('use_control', False)
-        # self.n_control = config['n_control']
-        # self.n_state = config['n_state']
         
         optimizer = self.config.get('optimizer')
         
@@ -101,7 +101,6 @@ class EnsembleSparseRewardModel(BaseRewardModel):
                 are concatenated with U for the regression.
                 of shape (n_time, n_state) (where n_time depends on the traj)
         '''
-        # TO-DO: Probably remove the safe_idx? 
         self.optimizer.coef_list = []
         Y_tmp = np.concatenate(Y)
         X_flat = np.concatenate(X)
@@ -114,7 +113,7 @@ class EnsembleSparseRewardModel(BaseRewardModel):
             X_tmp = np.concatenate([np.array(X_flat), np.array(U_flat)], axis=-1)
         else: 
             X_tmp = X_flat
-        # X_tmp = self.feature_library.reshape_samples_to_spatial_grid(np.concatenate(X_tmp))
+
         X_tmp = self.feature_library.reshape_samples_to_spatial_grid(X_tmp)
         ThetaX = self.feature_library.fit_transform(X_tmp)
         
@@ -129,6 +128,7 @@ class EnsembleSparseRewardModel(BaseRewardModel):
             self.n_control = 1
         
     def reset_safe_list(self):
+        '''TO-DO: probably don't need safe_idx'''
         self.safe_idx = np.ones(self.n_models, dtype=bool)
         
     def get_coef_list(self):

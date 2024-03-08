@@ -17,7 +17,9 @@ def cart_reward(z, u):
     return upright * small_control * small_velocity * centered
 
 def double_cart_reward(z, u):
-    '''dmc reward for double-arm cartpole'''
+    '''
+    EXPERIMENTAL
+    dmc reward for double-arm cartpole'''
     cart_pos, cos_th1, sin_th1, cos_th2, sin_th2, dx, dth1, dth2 = z
     cos_th = np.array([cos_th1, cos_th2])
     dth = np.array([dth1, dth2])
@@ -47,6 +49,9 @@ def swimmer_reward(z,u, ctrl_cost_weight= 1e-4, forward_reward_weight=1):
 
 _REF_PIN_CL = np.array([0.0, 1.0, -1.0])
 def pinball_lift_track(z, u,  dt = 0.1):
+    '''
+    EXPERIMENTAL
+    Experimental analytic reward for a pinball env'''
     CL = z[:3]
     diff_sq = (CL - _REF_PIN_CL)**2
     return -dt * np.sum(diff_sq)
