@@ -1,5 +1,5 @@
 def update_dyn_and_rew_models(dyn_model_weights, rew_model_weights):
-    
+    '''ray wrapper for updating surrogate models'''
     def update_env_models(env):
         env.update_models_(dyn_model_weights, rew_model_weights)
     
@@ -26,6 +26,7 @@ def make_update_env_fn(env_conf):
     return update_env_fn
 
 def update_env_dyn_model(dyn_model):
+    '''ray wrapper for setting the dynamics model'''
     def update_env(env):
         # TO-DO: Is setattr safer? 
         env.dyn_model = dyn_model
