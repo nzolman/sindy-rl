@@ -6,9 +6,14 @@ class BasePolicy:
     def __init__(self):
         raise NotImplementedError
     def compute_action(self, obs):
+        '''given observation, output action'''
         raise NotImplementedError
 
 class FixedPolicy(BasePolicy): 
+    '''
+    Deterministic policy that provides feedforward control
+    from a prescribed sequence of actions
+    '''
     def __init__(self, fixed_actions):
         self.fixed_actions = fixed_actions
         self.n_step = 0
@@ -63,10 +68,17 @@ class RandomPolicy(BasePolicy):
 
 
 class SparseEnsemblePolicy(BasePolicy):
+    '''
+    Sparse ensemble dictionary model of the form
+    Y = \Theta(X) \Xi
+    where the labels Y are control values depending on the states u(x)
+    '''
     def __init__(self, optimizer, feature_library, min_bounds = None, max_bounds = None):
 
-        self.min_bounds = min_bounds
+        # bounds for the action space
+        self.min_bounds = min_bounds 
         self.max_bounds = max_bounds
+
         self.optimizer = optimizer
         self.feature_library = feature_library
         
@@ -74,16 +86,19 @@ class SparseEnsemblePolicy(BasePolicy):
         ThetaX = self.feature_library.transform(obs)
         u = self.optimizer.coef_ @ ThetaX
         
+        # clip action
         if self.min_bounds is not None:
             u = np.clip(u, self.min_bounds, self.max_bounds)
         return np.array(u, dtype=np.float32)
         
     def _init_features(self, X_concat):
+        '''compute Theta(X)'''
         X = self.feature_library.reshape_samples_to_spatial_grid(X_concat)
         self.ThetaX = self.feature_library.fit_transform(X)
         return self.ThetaX
     
     def fit(self, data_trajs, action_trajs):
+        '''Fit ensemble models'''
         X_concat = np.concatenate(data_trajs)
         Y_concat = np.concatenate(action_trajs)
         ThetaX = self._init_features(X_concat)
@@ -164,6 +179,7 @@ class SparseEnsemblePolicy(BasePolicy):
             print(print_str[:-2])
 
 class OpenLoopSinusoidPolicy(BasePolicy):
+    '''Feedforward control outputting a sinewave'''
     def __init__(self, dt=1, amp=1, phase=0, offset=0, f0=1, k=1):
         '''
         Amp * sin(freq * t - phase) + offset
@@ -197,6 +213,10 @@ class OpenLoopSinusoidPolicy(BasePolicy):
     
 
 class OpenLoopSinRest(OpenLoopSinusoidPolicy):
+    '''Feedforward Sine wave for some amount of time, then do nothing.
+    Used for generating data for Hydrogym environments and geting the decay
+    response.
+    '''
     def __init__(self, t_rest, **kwargs):
         super().__init__(**kwargs)
         self.t_rest = t_rest
@@ -220,6 +240,10 @@ class OpenLoopSinRest(OpenLoopSinusoidPolicy):
     
     
 class OpenLoopRandRest(RandomPolicy):
+    '''
+    Feedforward random actions, then null actions after some
+    amount of time.
+    '''
     def __init__(self, steps_rest, **kwargs):
         super().__init__(**kwargs)
         self.steps_rest = steps_rest
@@ -234,11 +258,15 @@ class OpenLoopRandRest(RandomPolicy):
         return u
 
 class SwitchPolicy(BasePolicy):
+    '''
+    A wrapper that switches between generic policies
+    '''
     def __init__(self, policies):
         self.policies = policies
         self.policy = policies[0]
     
     def switch_criteria(self):
+        '''Determine when to swap between policies'''
         pass
     
     def compute_action(self, obs):
@@ -246,12 +274,14 @@ class SwitchPolicy(BasePolicy):
         return policy.compute_action(obs)
         
 class SwitchAfterT(SwitchPolicy):
+    '''Switch between 2 policies after some amount of time'''
     def __init__(self, t_switch, policies):
         super().__init__(policies)
         self.t_switch = t_switch
         self.n_steps = 0
         
     def switch_criteria(self):
+        '''switch policies after some amount of time'''
         self.n_steps += 1
         
         if self.n_steps < self.t_switch: 
@@ -264,6 +294,7 @@ class SwitchAfterT(SwitchPolicy):
     
 
 class SignPolicy(BasePolicy):
+    '''Wrapper for creating a symmetric bang-bang controller from a given policy'''
     def __init__(self,policy, mag=1.0, thresh = 0):
         self.wrapper = policy
         self.mag = mag
