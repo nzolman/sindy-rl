@@ -3,7 +3,7 @@ import pysindy as ps
 import pickle
 
 
-from sindy_rl.refactor.sindy_utils import build_optimizer, build_feature_library
+from sindy_rl.sindy_utils import build_optimizer, build_feature_library
 from sindy_rl import reward_fns
 
 class BaseRewardModel:
