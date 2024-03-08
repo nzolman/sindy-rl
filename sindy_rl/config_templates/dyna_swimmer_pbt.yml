@@ -1,5 +1,7 @@
+# --------------------------------------------------------
 # Swimmer `SINDy-RL` benchmark as part of ArXiv Section 5.1
 # for use with `pbt_dyna.py`
+# --------------------------------------------------------
 
 exp_dir: pbt
 n_train_iter: 40000

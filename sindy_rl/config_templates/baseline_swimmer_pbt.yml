@@ -1,5 +1,7 @@
+# --------------------------------------------------------
 # Swimmer `Baseline PPO + PBT` benchmark as part of ArXiv Section 5.1
 # for use with `pbt_baseline.py`
+# --------------------------------------------------------
 
 exp_dir: test
 fcnet_hiddens: [64, 64]

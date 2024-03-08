@@ -1,5 +1,7 @@
+# --------------------------------------------------------
 # intention to provide a convenient place to load custom/wrapped environments from
 # when loading classes/configs from strings.
+# --------------------------------------------------------
 
 import warnings
 import numpy as np

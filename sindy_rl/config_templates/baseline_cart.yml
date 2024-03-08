@@ -1,5 +1,7 @@
+# --------------------------------------------------------
 # Swing-Up PPO Baseline as part of ArXiv Section 5.1
 # intended for use with `pbt_baseline.py` with use_pbt = False
+# --------------------------------------------------------
 
 exp_dir: cart-swingup
 fcnet_hiddens: [64, 64]

@@ -3,7 +3,6 @@ warnings.filterwarnings('ignore')
 
 import os
 import numpy as np
-import random
 
 from ray.rllib.algorithms.registry import ALGORITHMS as rllib_algos
 from ray.tune.schedulers import PopulationBasedTraining

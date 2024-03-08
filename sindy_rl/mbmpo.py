@@ -1,7 +1,7 @@
-'''
-    Used in Benchmarking the swingup environment.
-    Section 5.1 of arXiv paper.
-'''
+# --------------------------------------------------------
+# Used in Benchmarking the swingup environment.
+# Section 5.1 of arXiv paper.
+# --------------------------------------------------------
 
 import os
 import numpy as np

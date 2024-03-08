@@ -1,7 +1,9 @@
+# --------------------------------------------------------
 # Cylinder PPO Baseline as part of ArXiv Section 5.1
 # even though a "baseline", this intended for use with `pbt_dyna.py` 
 # with use_pbt = False 
 # (it was easier to just run with "env_config: ... use_real_env: True")
+# --------------------------------------------------------
 
 exp_dir: cylinder_baseline
 n_train_iter: 40000

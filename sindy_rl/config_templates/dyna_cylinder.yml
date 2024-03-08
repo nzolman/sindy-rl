@@ -1,5 +1,7 @@
+# --------------------------------------------------------
 # Cylinder `SINDy-RL` benchmark as part of ArXiv Section 5.1
 # for use with `pbt_dyna.py`
+# --------------------------------------------------------
 
 exp_dir: cylinder_new
 n_train_iter: 40000
