@@ -13,7 +13,7 @@ from sindy_rl.hydroenv import CylinderLiftEnv
 from sindy_rl.env import rollout_env
 from sindy_rl.policy import OpenLoopRandRest, OpenLoopSinRest
 from sindy_rl.traj_buffer import BaseTrajectoryBuffer
-from sindy_rl.refactor.hydro_utils.gen_cylinder_data import gen_trajs
+from sindy_rl.hydro_utils.gen_cylinder_data import gen_trajs
 
     
 if __name__ == '__main__':
