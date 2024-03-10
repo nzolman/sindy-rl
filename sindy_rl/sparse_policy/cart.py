@@ -16,7 +16,7 @@ except Exception as e:
 
 
 if __name__ == '__main__':
-    trial_dir = os.path.join(_parent_dir, 'data/agents/checkpoint_001150')
+    trial_dir = os.path.join(_parent_dir, 'data/agents/swingup')
     
     # load models, data, and env
     cart_dyn, cart_rew, cart_data, cart_policy, cart_env = get_models(
