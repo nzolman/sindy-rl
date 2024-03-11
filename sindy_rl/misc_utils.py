@@ -25,3 +25,30 @@ def renamed_load(file_obj):
 def renamed_loads(pickled_bytes):
     file_obj = io.BytesIO(pickled_bytes)
     return renamed_load(file_obj)
+
+
+if __name__ == '__main__':
+    import os
+    import glob
+    from sindy_rl import _parent_dir
+    
+    root_dir = os.path.join(_parent_dir, 'data', 'agents')
+    fnames = ['off-pi_data.pkl', 'on-pi_data.pkl', 
+              'rew_model.pkl', 'dyn_model.pkl',
+              'traj_eval-fine.pkl', 'traj_eval-med.pkl',
+              'algorithm_state.pkl', 'policy_state.pkl']
+    
+    # safe resave of all the pickle files.
+    for fname in fnames:
+        fpaths = glob.glob(os.path.join(root_dir, '**',  fname), recursive=True)
+        
+        for fpath in fpaths:
+            print(fpath)
+            # safe load
+            with open(fpath, 'rb') as f:
+                obj = renamed_load(f)
+            # resave
+            with open(fpath, 'wb') as f:
+                pickle.dump(obj, f)
+        
+    
