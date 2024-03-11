@@ -1,5 +1,6 @@
-# Example Usage: 
-# mpiexec -np 12 python gen_cylinder_checkpoints.py
+# ----------------------------------------------------
+# Used for generating checkpoints for the Cylinder env
+# ----------------------------------------------------
 
 import os
 os.environ['OMP_NUM_THREADS']='1'

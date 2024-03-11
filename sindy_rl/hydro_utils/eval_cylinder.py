@@ -1,3 +1,7 @@
+# -------------------------------------------------
+# Used for evaluating an RLlib policy.
+# -------------------------------------------------
+
 import os
 import yaml
 from ray.rllib.algorithms import Algorithm
@@ -22,17 +26,10 @@ if __name__ == '__main__':
 
 
     exp_dir = os.path.join(_parent_dir, 'ray_results',
-                           # 'cylinder_new/dyna_cylinder_refit=25_on-collect=200'
-                           # 'cylinder_baseline/baseline_4k_dyna-api-eval=1'
                            'cylinder_new/dyna_cylinder_refit=25_on-collect=200_filter'
-                           # 'cylinder_baseline/baseline_4k_dyna-api-eval=1_filter'
                           )
     trial_dir = os.path.join(exp_dir,
-                            # f'dyna_sindy_8ee6e_{trial_idx:05}_{trial_idx}_2023-12-22_15-55-41'
-                             # f'dyna_sindy_37a48_{trial_idx:05}_{trial_idx}_2024-01-19_03-17-03'
-                             # f'dyna_sindy_df8d9_{trial_idx:05}_{trial_idx}_2024-02-05_00-09-47'
                              f'dyna_sindy_df8d9_{trial_idx:05}_{trial_idx}_2024-02-05_00-09-48'
-                             # f'dyna_sindy_86140_{trial_idx:05}_{trial_idx}_2024-02-08_00-32-22'
                             )
     
     ckpt_path = os.path.join(trial_dir, 
@@ -40,7 +37,6 @@ if __name__ == '__main__':
                              )
 
     save_dir = os.path.join(_parent_dir, 'data', 'hydro', 'cylinder', 'eval', 
-                            # '2023-12-13_fine', 
                             '2024-02-05_filter',
                             f'dt=1e-2_long_RE={_RE}_{MESH}_agent={trial_idx}_check={check_idx}_baseline={baseline}_filter={use_filter}'
                             )

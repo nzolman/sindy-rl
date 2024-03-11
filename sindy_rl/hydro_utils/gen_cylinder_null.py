@@ -1,3 +1,8 @@
+# ----------------------------------------------------
+# Used for generating data with no control
+# ----------------------------------------------------
+
+
 import os
 os.environ['OMP_NUM_THREADS']='1'
 from tqdm import tqdm

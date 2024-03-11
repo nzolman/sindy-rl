@@ -1,5 +1,6 @@
-# Example Usage: 
-# mpiexec -np 12 python gen_cylinder_data.py
+# ----------------------------------------------------
+# Used for generating off-policy data for SINDy
+# ----------------------------------------------------
 
 import os
 os.environ['OMP_NUM_THREADS']='1'

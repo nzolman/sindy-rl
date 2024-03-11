@@ -1,3 +1,6 @@
+# -------------------------------------------------
+# Used for evaluating a sparse dictionary policy.
+# -------------------------------------------------
 import os
 import pickle
 
