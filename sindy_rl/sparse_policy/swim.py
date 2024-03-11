@@ -16,29 +16,19 @@ except Exception as e:
 
 
 if __name__ == '__main__':
-    trial_dir = os.path.join(_parent_dir, 'data/agents/swingup/dyna')
+    trial_dir = os.path.join(_parent_dir, 'data/agents/swimmer/dyna')
     
     # load models, data, and env
-    cart_dyn, cart_rew, cart_data, cart_policy, cart_env = get_models(
+    swim_dyn, swim_rew, swim_data, swim_policy, swimmer_env = get_models(
                                                                         trial_dir,
-                                                                        check_idx= 1150, # 1350, for overfit
-                                                                        return_policy=True,
-                                                                        )
-    cart_unbounded_policy = RLlibPolicyWrapper(cart_policy.algo.get_policy(), mode='policy')
+                                                                        check_idx=1250,
+                                                                        return_policy=True
+                                                                )
+    swim_unbounded_policy = RLlibPolicyWrapper(swim_policy.algo.get_policy(), mode='policy')
 
 
-    # evaluate baseline
-    cart_baseline_obs, cart_baseline_acts, cart_baseline_rews = rollout_env(
-                                                                        cart_env.real_env, 
-                                                                        policy=cart_policy, 
-                                                                        n_steps = 15000, 
-                                                                        verbose=True
-                                                                        )
-    baseline_perf = np.median([r.sum() for r in cart_baseline_rews])
-
-
-    def fit_cart(env, dyn_model, policy, unbounded_policy, 
-                hyper_mesh, n_dyn_rollout=50000, use_median=False, poly_deg = 3):
+    def fit_swim(env, dyn_model, policy, unbounded_policy, hyper_mesh, n_dyn_rollout=50000, 
+                seed=0, use_median = False, poly_deg = 3):
         '''
         Essentially a wrapper for fit_policies_v
         
@@ -60,35 +50,33 @@ if __name__ == '__main__':
             poly_deg: maximal degree of polynomial for sparse policy.
         '''
         
-        # randomly generate initial conditions near the stable equilibrium
-        np.random.seed(0)
+        # randomly generate initial conditions similar to the SwimmerEnv
+        np.random.seed(seed)
         N_ICs = 400
-        th_eps = 0.1
-        th_random = np.random.normal(loc = np.pi,
-                                    scale=0.1,
-                                    size = (N_ICs)
-                                    )
-        ic_X = np.random.normal(loc=0, scale=0.25,
-                                size = (N_ICs, 5)
+
+        ic_X = np.random.normal(loc=0, scale=0.2,
+                                size = (N_ICs, 8)
                                 )
-        ic_X[:,1] = np.cos(th_random)
-        ic_X[:,2] = np.sin(th_random)
-            
+
         # rollout trajectories using the SINDy dynamics
         env.dynamics_model = deepcopy(dyn_model)
         env.dynamics_model.set_median_coef_()
         env.use_real_env = False
         env.reset_from_buffer = True
-        env.buffer_dict = {'x': [ic_X]} # force to draw from particular ICs
+        env.buffer_dict = {'x': [ic_X]}
         env.reset()
-        traj_obs, traj_acts, traj_rews = rollout_env(env, policy, 
+        traj_obs, traj_acts, traj_rews = rollout_env(env, 
+                                                    policy, 
                                                     n_steps = n_dyn_rollout, 
-                                                    n_steps_reset=500, verbose = True)
+                                                    n_steps_reset=200, verbose = True,
+                                                    seed=seed+1
+                                                    )
 
-        # randomly generate noise on top of the trajectories
-        np.random.seed(1)
+        # randomly generate noise on top of the surrogate trajs
         n_resamples = 2
-        X_data = np.concatenate(traj_obs)
+        X = np.concatenate(traj_obs)
+        n_train = int(0.8*len(X)) # train data is the first 80%
+        X_data = X[:n_train]
         X_data = np.concatenate([X_data for n in range(n_resamples)])
 
         noise_scale = 1e-1
@@ -102,16 +90,14 @@ if __name__ == '__main__':
         U_data = unbounded_policy.algo.compute_actions(X_data, explore=False)[0]
         U_data = np.clip(U_data, -5, 5)
 
-
         traj_X_normal = X_data
         traj_U_normal = U_data
         
-        # evaluation data is just without noise (note, this might overfit---can instead split!)
-        traj_X_eval = np.concatenate(traj_obs)
+        # evaluation data is the last 20% of data
+        traj_X_eval = X[n_train:]
         traj_U_eval = unbounded_policy.algo.compute_actions(traj_X_eval, explore=False)[0]
         traj_U_eval = np.clip(traj_U_eval, -5, 5)
-        
-        
+
         normal_traj_data = {
                 'X_data': traj_X_normal,
                 'U_data': traj_U_normal,
@@ -125,38 +111,49 @@ if __name__ == '__main__':
 
         # sweep through hyper params
         val = normal_traj_data
-        CLIP_BOUNDS = np.array([[-1.0], [1.0]])
+        CLIP_BOUNDS = np.array([[-1.0, -1.0], [1.0, 1.0]])
         res_dict = fit_policies_v(**val, hyper_mesh=hyper_mesh, n_models = 20, 
-                                use_median = use_median, clip_params = CLIP_BOUNDS, bounds = CLIP_BOUNDS, 
-                                poly_deg = poly_deg)
+                                use_median = use_median, clip_params = CLIP_BOUNDS, 
+                                bounds = CLIP_BOUNDS, poly_deg = poly_deg)
         sparse_policy = res_dict['best_policy']
-        sparse_policy.set_median_coef_()
         
         return res_dict, normal_traj_data
 
 
+
     # fit the policies (sweep through hyper parameters)
     # and select best one
-    cart_res_dict, cart_normal_traj_data = fit_cart(cart_env, cart_dyn, 
-                                                cart_policy, cart_unbounded_policy, 
+    swim_res_dict, swim_normal_traj_data = fit_swim(swimmer_env, swim_dyn, 
+                                                swim_policy, swim_unbounded_policy, 
                                                 hyper_mesh,
-                                                n_dyn_rollout=5000,
-                                                use_median=False,
-                                                poly_deg=3)
+                                                n_dyn_rollout=10000,
+                                                poly_deg=3,
+                                                seed=0)
 
-    cart_sparse_policy = cart_res_dict['best_policy']
+    swim_sparse_policy = swim_res_dict['best_policy']
 
     # example of saving the policy
-    with open('cart_sparse_policy.pkl', 'wb') as f:
-        pickle.dump(cart_sparse_policy, f)
+    with open('swim_sparse_policy.pkl', 'wb') as f:
+        pickle.dump(swim_sparse_policy, f)
 
 
-    cart_sparse_policy.set_mean_coef_()
-    cart_eval_obs, cart_eval_acts, cart_eval_rews = rollout_env(cart_env.real_env, 
-                                                                policy=cart_sparse_policy, 
-                                                                n_steps = 15000, verbose=True)
-    perf = np.median([r.sum() for r in cart_eval_rews])
+    swim_sparse_policy.set_mean_coef_()
 
+    swimmer_env.real_env.reset_on_bounds = False
+    eval_obs, eval_acts, eval_rews = rollout_env(swimmer_env.real_env, 
+                                                policy=swim_sparse_policy, 
+                                                n_steps = 15000, verbose=True, 
+                                                seed=42)
+    
+    perf = np.median([r.sum() for r in eval_rews])
+    
+    swim_baseline_obs, swim_baseline_acts, swim_baseline_rews = rollout_env(swimmer_env.real_env, 
+                                                                policy=swim_policy, 
+                                                                n_steps = 15000, 
+                                                                verbose=True,
+                                                                seed=42)
+    baseline_perf = np.median([r.sum() for r in swim_baseline_rews])
+    
     # print comparison of rewards
     print(f'baseline: {baseline_perf}, sparse: {perf}')
 

@@ -36,7 +36,9 @@ if __name__ == '__main__':
     fnames = ['off-pi_data.pkl', 'on-pi_data.pkl', 
               'rew_model.pkl', 'dyn_model.pkl',
               'traj_eval-fine.pkl', 'traj_eval-med.pkl',
-              'algorithm_state.pkl', 'policy_state.pkl']
+              'algorithm_state.pkl', 'policy_state.pkl',
+              'sparse_policy.pkl', 
+              'sparse_policy_OVERFIT.pkl']
     
     # safe resave of all the pickle files.
     for fname in fnames:
