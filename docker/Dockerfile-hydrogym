@@ -1,3 +1,9 @@
+# -----------------------------------------------------
+# NOTE: This originally used a version of firedrake
+#       built ~ November 2022. Would not recommend
+#       expecting this to work.
+# -----------------------------------------------------
+
 FROM firedrakeproject/firedrake-env:latest AS hydrogym
 
 USER root
