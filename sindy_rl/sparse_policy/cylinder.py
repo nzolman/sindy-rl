@@ -3,15 +3,15 @@ import pickle
 import numpy as np
 from copy import deepcopy
 
+from numpy.linalg import det
+from scipy.stats import dirichlet
+from scipy.spatial import ConvexHull, Delaunay
+
 from sindy_rl import _parent_dir
 from sindy_rl.env import rollout_env
 from sindy_rl.policy import RLlibPolicyWrapper
 from sindy_rl.sparse_policy.utils import get_models, fit_policies_v, hyper_mesh
 
-
-from numpy.linalg import det
-from scipy.stats import dirichlet
-from scipy.spatial import ConvexHull, Delaunay
 
 def dist_in_hull(points, n):
     '''
