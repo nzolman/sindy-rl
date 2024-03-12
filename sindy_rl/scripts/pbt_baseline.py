@@ -21,7 +21,7 @@ if __name__ == '__main__':
     # TO-DO: replace with argparse
     filename = os.path.join(_parent_dir, 
                             'config_templates', 
-                            'baseline_cylinder_config_test.yml' # replace with appropriate config yaml
+                            'baseline_swimmer_pbt.yml' # replace with appropriate config yaml
                             )
     # load config
     with open(filename, 'r') as f:
