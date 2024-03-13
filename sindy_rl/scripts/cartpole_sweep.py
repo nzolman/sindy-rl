@@ -35,7 +35,10 @@ if __name__ == '__main__':
     from pprint import pprint
     
     from sindy_rl.policy import RandomPolicy
-    filename = os.path.join(_parent_dir, 'config_templates', 'dyna_config_cart.yml')
+    filename = os.path.join(_parent_dir, 
+                            'sindy_rl',
+                            'config_templates', 
+                            'dyna_config_cart.yml')
     
     with open(filename, 'r') as f:
         dyna_config = yaml.load(f, Loader=yaml.SafeLoader)

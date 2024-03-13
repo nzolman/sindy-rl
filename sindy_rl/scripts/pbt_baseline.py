@@ -19,7 +19,8 @@ if __name__ == '__main__':
     from sindy_rl import _parent_dir
 
     # TO-DO: replace with argparse
-    filename = os.path.join(_parent_dir, 
+    filename = os.path.join(_parent_dir,
+                            'sindy_rl', 
                             'config_templates', 
                             'baseline_swimmer_pbt.yml' # replace with appropriate config yaml
                             )

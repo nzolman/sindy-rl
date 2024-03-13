@@ -113,8 +113,9 @@ if __name__ == '__main__':
     
     # TO-DO: replace with argparse
     filename = os.path.join(_parent_dir, 
+                            'sindy_rl',
                             'config_templates', 
-                            'dyna_config_cart.yml' # replace with appropriate config yaml
+                            'dyna_cylinder.yml' # replace with appropriate config yaml
                             )
     
     # load config
