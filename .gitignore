@@ -1,6 +1,16 @@
 **/tmp/
 notebooks/
+
 data/hydro
+
+data/agents/cylinder
+data/agents/swimmer
+data/agents/swingup
+
+data/benchmarks/cylinder
+data/benchmarks/swimmer
+data/benchmarks/swingup
+
 notebooks
 images/
 ray_results/
