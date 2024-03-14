@@ -1,0 +1,65 @@
+# --------------------------------------------------------
+# Swimmer `Baseline PPO + PBT` benchmark as part of ArXiv Section 5.1
+# for use with `pbt_baseline.py`
+# --------------------------------------------------------
+
+exp_dir: test
+fcnet_hiddens: [64, 64]
+use_pbt: True
+
+drl:
+  class: PPO
+  config:
+    training:
+      # lr_schedule: [[0, 3.0e-4], [10000000, 3.0e-9]]
+      gamma: 0.99
+      lr: 3.0e-4
+      lambda_: 0.95
+      vf_loss_coeff: 0.5
+      vf_clip_param: 0.2
+      clip_param: 0.2
+      grad_clip: 0.5
+    environment:
+      env: SwimmerWithBounds
+      env_config:
+        reset_on_bounds: False
+    framework: torch
+    evaluation:
+      evaluation_config:
+        reset_on_bounds: False
+      evaluation_interval: 10
+      evaluation_duration: 5
+      evaluation_duration_unit: "episodes"
+      always_attach_evaluation_results: True
+
+ray_config:
+    run_config:
+        name: "test_swimmer_baseline_pbt_choice_3"
+        stop:
+            num_env_steps_sampled: 4.0e+6
+        log_to_file: True 
+    tune_config:
+        num_samples: 20 # number of sample trials to run
+    checkpoint_freq: 25
+
+
+pbt_config:
+  mode: "max"
+  metric: "evaluation/episode_reward_mean"
+  time_attr: "training_iteration"
+  perturbation_interval: 50
+  resample_probability: 0.25
+  quantile_fraction: 0.25
+  synch: True
+
+  hyperparam_mutations:
+    lr: 
+      search_class: choice
+      search_space: [[1.0e-6, 5.0e-6, 1.0e-5, 5.0e-5, 1.0e-4, 5.0e-4, 1.0e-3, 5.0e-3]]
+    lambda_: 
+      search_class: choice
+      search_space: [[0.9, 0.95, 0.99, 0.999, 0.9999, 1.0]]
+    gamma: 
+      search_class: choice
+      search_space: [[0.9, 0.95, 0.99, 0.999, 0.9999, 1.0]]
+        

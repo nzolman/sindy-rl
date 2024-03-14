@@ -1,0 +1,143 @@
+# --------------------------------------------------------
+# Swing-Up `SINDy-RL (quadratic)` benchmark as part of ArXiv Section 5.1
+# for use with `pbt_dyna.py`
+# --------------------------------------------------------
+
+exp_dir: cart-swingup
+n_train_iter: 40000
+dyn_fit_freq: 10
+fcnet_hiddens: [64, 64]
+# use_pbt: False
+
+# used for rolling out new on-policy data for 
+# dynamics fitting
+real_env:
+  class: DMCEnvWrapper
+  config: 
+      domain_name: "cartpole"
+      task_name: "swingup"
+      frame_skip: 1
+      from_pixels: False
+      task_kwargs:
+        time_limit: 10 # DEFAULT IS 10!
+
+drl:
+  class: PPO
+  config: # what is passed to RLlib
+    training: 
+      lr_schedule: [[0, 3.0e-4], [10000000, 3.0e-9]]
+      gamma: 0.99
+      lambda_: 0.95
+      vf_loss_coeff: 0.5
+      vf_clip_param: 0.2
+      clip_param: 0.2
+      grad_clip: 0.5
+    environment:
+      env: 
+      env_config:
+        max_episode_steps: 1000
+        real_env_class: DMCEnvWrapper
+        real_env_config: 
+          domain_name: "cartpole"
+          task_name: "swingup"
+          frame_skip: 1
+          from_pixels: False
+          task_kwargs:
+            time_limit: 10 # DEFAULT IS 10!
+        init_real_on_start: True
+        use_real_env: False
+        ensemble_modes: 
+          dyn: median
+          rew: # None
+        init_weights: True
+        act_dim: 1
+        obs_dim: 5
+        act_bounds: 
+          - [-1, 1]
+        obs_bounds: 
+          - [-5, 5]     # x
+          - [-1.1, 1.1] # cos(th)
+          - [-1.1, 1.1] # sin(th)
+          - [-10, 10]   # dx
+          - [-10, 10]   # dth
+    framework: torch
+    evaluation: 
+      evaluation_config:
+        env_config:
+          max_episode_steps: 1000
+          init_real_on_start: True
+          use_real_env: True
+          use_bounds: False
+          real_env_class: DMCEnvWrapper
+          real_env_config: 
+            domain_name: "cartpole"
+            task_name: "swingup"
+            from_pixels: False
+            task_kwargs:
+              time_limit: 10 # DEFAULT IS 10!
+        explore: False 
+      evaluation_interval: 1
+      evaluation_duration: 5
+      evaluation_duration_unit: "episodes"
+      always_attach_evaluation_results: True
+
+# initial data collection
+off_policy_buffer:
+  config:
+    max_traj:
+    max_samples:
+  init: 
+    type: collect
+    kwargs: 
+      n_steps: 8000
+      n_steps_reset: 1000
+
+# subsequent data collection
+on_policy_buffer:
+  config:
+    max_traj: 
+    max_samples: 8000
+  collect:
+    n_steps: 500
+    n_steps_reset: 2000
+
+# defining the SINDy dynamics
+dynamics_model:
+  class: EnsembleSINDyDynamicsModel # sindy_rl.dynamics
+  config:
+    'callbacks': project_cartpole
+    'dt': 1
+    'discrete': True 
+    'optimizer': 
+      'base_optimizer':
+        'name': 'STLSQ'
+        'kwargs': 
+          'alpha': 5.0e-5
+          'threshold': 7.0e-3
+      'ensemble':
+        'bagging': True
+        'library_ensemble': True
+        'n_models': 20
+    'feature_library': 
+      name: affine
+      kwargs:
+        poly_deg: 2
+        n_state: 5 
+        n_control: 1
+        poly_int: True
+        tensor: True
+
+rew_model:
+  class: FunctionalRewardModel # sindy_rl.reward
+  config: 
+    name: cart_reward
+
+ray_config:
+    run_config:
+        name: "dyna-sindy_freq=10_coll=500_buff=8k_8k_ens-rew=fixed_ens-dyn=med-20_steps"
+        stop:
+            num_env_steps_sampled: 1.0e+7
+        log_to_file: True 
+    tune_config:
+        num_samples: 20 # number of sample trials to run
+    checkpoint_freq: 10

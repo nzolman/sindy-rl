@@ -1,0 +1,176 @@
+# --------------------------------------------------------
+# Swimmer `SINDy-RL` benchmark as part of ArXiv Section 5.1
+# for use with `pbt_dyna.py`
+# --------------------------------------------------------
+
+exp_dir: pbt
+n_train_iter: 40000
+dyn_fit_freq: 5
+fcnet_hiddens: [64, 64]
+use_pbt: True
+
+# used for rolling out new on-policy data for 
+# dynamics fitting
+real_env:
+  class: SwimmerWithBounds
+  config: 
+    env_kwargs: {}
+    max_episode_steps: 1000
+    reward_threshold: 360
+    reset_on_bounds: True
+
+
+drl:
+  class: PPO
+  config:
+    training: 
+      gamma: 0.99
+      lr: 3.0e-4
+      lambda_: 0.95
+      vf_loss_coeff: 0.5
+      vf_clip_param: 0.2
+      clip_param: 0.2
+      grad_clip: 0.5
+    environment:
+      env: 
+      env_config:
+        real_env_class: SwimmerWithBounds
+        real_env_config: 
+          reset_on_bounds: True
+        init_real_on_start: True
+        ensemble_modes: 
+          dyn: median
+          rew: median
+        init_weights: True
+        act_dim: 2
+        obs_dim: 8
+        act_bounds: 
+          - [-1, 1]
+          - [-1, 1]
+        obs_bounds: 
+          - [-3.1415, 3.1415]
+          - [-1.7453, 1.7453]
+          - [-1.7453, 1.7453]
+          - [-10, 10]
+          - [-10, 10]
+          - [-10, 10]
+          - [-10, 10]
+          - [-10, 10]
+    framework: torch
+    evaluation: 
+      evaluation_config:
+        env_config: 
+          init_real_on_start: True
+          use_real_env: True
+          use_bounds: False
+          real_env_class: SwimmerWithBounds
+          real_env_config: 
+            reset_on_bounds: False
+            max_episode_steps: 1000
+            reward_threshold: 360
+        explore: False
+      evaluation_interval: 5
+      evaluation_duration: 5
+      evaluation_duration_unit: "episodes"
+      always_attach_evaluation_results: True
+
+
+off_policy_buffer:
+  config:
+    max_traj:
+    max_samples:
+  init: 
+    type: collect
+    kwargs: 
+      n_steps: 12000 
+      n_steps_reset: 100 
+
+
+on_policy_buffer:
+  config:
+    max_traj: 
+    max_samples: 12000
+  collect:
+    n_steps: 1000
+    n_steps_reset: 2000
+
+
+dynamics_model:
+  class: EnsembleSINDyDynamicsModel
+  config:
+    'dt': 1
+    'discrete': True 
+    'optimizer': 
+      'base_optimizer':
+        'name': 'STLSQ'
+        'kwargs': 
+          'alpha': 5.0e-1
+          'threshold': 2.0e-2
+      'ensemble':
+        'bagging': True
+        'library_ensemble': True
+        'n_models': 20
+    'feature_library': 
+      name: affine
+      kwargs:
+        poly_deg: 2
+        n_state: 8 
+        n_control: 2
+        poly_int: False
+        tensor: True
+    
+rew_model:
+  class: EnsembleSparseRewardModel
+  config:
+    'use_control': False
+    'optimizer': 
+      'base_optimizer':
+        'name': 'STLSQ'
+        'kwargs': 
+          'alpha': 1.0e-5
+          'threshold': 5.0e-2
+      'ensemble':
+        'bagging': True
+        'library_ensemble': True
+        'n_models': 20
+    'feature_library': 
+      name: PolynomialLibrary
+      kwargs:
+        degree: 2
+        include_bias: False
+        include_interaction: False
+
+
+ray_config:
+    run_config:
+        name: "dyna-swimmer_choice_rew=med_dyn=med_refit=5_collect=12k_pbt=50_check=25_save"
+        stop:
+            num_env_steps_sampled: 5.0e+6
+        log_to_file: True 
+        verbose: 2
+    tune_config:
+        num_samples: 20 # number of sample trials to run
+    checkpoint_freq: 25
+    checkpoint_config:
+      checkpoint_score_attribute: "dyn_collect/mean_rew"
+
+# pbt configuration
+pbt_config:
+  mode: "max"
+  metric: "dyn_collect/mean_rew"
+  time_attr: "training_iteration"
+  perturbation_interval: 50
+  resample_probability: 0.25
+  quantile_fraction: 0.25
+  synch: True
+
+  hyperparam_mutations:
+    drl/config/training/lr: 
+      search_class: choice
+      search_space: [[1.0e-6, 5.0e-6, 1.0e-5, 5.0e-5, 1.0e-4, 5.0e-4, 1.0e-3, 5.0e-3]]
+    drl/config/training/lambda_: 
+      search_class: choice
+      search_space: [[0.9, 0.95, 0.99, 0.999, 0.9999, 1.0]]
+    drl/config/training/gamma: 
+      search_class: choice
+      search_space: [[0.9, 0.95, 0.99, 0.999, 0.9999, 1.0]]

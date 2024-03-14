@@ -1,0 +1,151 @@
+# --------------------------------------------------------
+# Cylinder `SINDy-RL` benchmark as part of ArXiv Section 5.1
+# for use with `pbt_dyna.py`
+# --------------------------------------------------------
+
+exp_dir: cylinder_new
+n_train_iter: 40000
+dyn_fit_freq: 25
+fcnet_hiddens: [64, 64]
+use_pbt: False
+
+# used for rolling out new on-policy data for 
+# dynamics fitting
+real_env:
+  class: CylinderLiftEnv
+  config: 
+      hydro_config:
+        flow_config:
+          actuator_integration: 'implicit'
+          Re: 100
+          mesh: medium
+          restart: '/home/firedrake/sindy-rl/data/hydrogym/cylinder/med_mesh_init_vortex_shedding.ckpt' 
+        solver_config:
+            dt: 1.0e-2
+      n_skip_on_reset: 5
+      control_freq: 10
+      max_episode_steps: 300
+      use_filter: True
+
+
+drl:
+  class: PPO
+  config:
+    training:
+      gamma: 0.99
+      lr: 3.0e-4
+      lambda_: 0.95
+      vf_loss_coeff: 0.5
+      vf_clip_param: 0.2
+      clip_param: 0.2
+      grad_clip: 0.5
+    environment:
+      env: 
+      env_config:
+        init_real_on_start: False
+        reset_from_buffer: True
+        max_episode_steps: 300
+        real_env_class: CylinderLiftEnv
+        real_env_config: 
+            hydro_config:
+              flow_config:
+                actuator_integration: 'implicit'
+                Re: 100
+                mesh: medium
+                restart: '/home/firedrake/sindy-rl/data/hydrogym/cylinder/med_mesh_init_vortex_shedding.ckpt' 
+              solver_config:
+                  dt: 1.0e-2
+            n_skip_on_reset: 5
+            control_freq: 10
+            max_episode_steps: 300
+            use_filter: True
+        ensemble_modes: 
+          dyn: median
+          rew: median
+        init_weights: True
+        act_dim: 1
+        obs_dim: 2
+        act_bounds: 
+          - [-1.5707963267948966, 1.5707963267948966]
+        obs_bounds: 
+          - [-10, 10]
+          - [-200, 200]
+    framework: torch
+    evaluation: 
+      evaluation_interval: # None
+
+
+off_policy_buffer:
+  config:
+    max_traj:
+    max_samples:
+  init: 
+    type: file
+    kwargs: 
+      fname: '/home/firedrake/sindy-rl/data/hydrogym/cylinder/traj_data-off_pi.pkl'
+
+
+on_policy_buffer:
+  config:
+    max_traj: 
+    max_samples: 2400
+  collect:
+    n_steps: 200
+    n_steps_reset: 300
+
+
+dynamics_model:
+  class: EnsembleSINDyDynamicsModel
+  config:
+    'dt': 1
+    'discrete': True 
+    'optimizer': 
+      'base_optimizer':
+        'name': 'STLSQ'
+        'kwargs': 
+          'alpha':   1.0e-5
+          'threshold': 1.0e-3
+      'ensemble':
+        'bagging': True
+        'library_ensemble': True
+        'n_models': 20
+    'feature_library': 
+      name: affine
+      kwargs:
+        poly_deg: 3
+        n_state: 2
+        n_control: 1
+        poly_int: True
+        tensor: False
+
+rew_model:
+  class: EnsembleSparseRewardModel
+  config:
+    'use_control': True
+    'optimizer': 
+        'base_optimizer':
+            'name': 'STLSQ'
+            'kwargs': 
+                'alpha':   1.0e-5
+                'threshold': 1.0e-4
+        'ensemble':
+            'bagging': True
+            'library_ensemble': True
+            'n_models': 20
+    'feature_library': 
+        name: PolynomialLibrary
+        kwargs:
+            degree: 2
+            include_bias: True
+            include_interaction: True
+
+
+ray_config:
+    run_config:
+        name: "dyna_cylinder_refit=25_on-collect=200_filter"
+        stop:
+            num_env_steps_sampled: 5.0e+6
+        log_to_file: True 
+    tune_config:
+        num_samples: 20 # number of sample trials to run
+    checkpoint_freq: 10

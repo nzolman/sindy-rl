@@ -1,4 +1,4 @@
-ray[rllib,tune]==2.0.0
+ray[rllib,tune]==2.6.3
 mujoco
 # gym==0.26.2
 torch==1.13.0
@@ -11,3 +11,6 @@ PyYAML
 tqdm
 pysindy
 jupyterlab
+dm-env==1.6
+dm_control==1.0.14
+mujoco==2.3.7

@@ -1,0 +1,4 @@
+./data/benchmarks/cylinder.tar.gz filter=lfs diff=lfs merge=lfs -text
+./data/agents.tar.gz filter=lfs diff=lfs merge=lfs -text
+**/*.tar.gz filter=lfs diff=lfs merge=lfs -text
+**/*.ipynb filter=lfs diff=lfs merge=lfs -text
