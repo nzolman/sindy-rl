@@ -11,4 +11,6 @@ PyYAML
 tqdm
 pysindy
 jupyterlab
-dm_control
+dm-env==1.6
+dm-control==1.0.14
+mujoco==2.3.7
