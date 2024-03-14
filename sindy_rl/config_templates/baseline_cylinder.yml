@@ -21,7 +21,7 @@ real_env:
           actuator_integration: 'implicit'
           Re: 100
           mesh: medium
-          restart: '/home/firedrake/sindy-rl/data/hydro/cylinder/2023-12-13_medium/Re=100_dt=1e-3/snapshots/no_control_487500.ckpt'
+          restart: '/home/firedrake/sindy-rl/data/hydrogym/cylinder/med_mesh_init_vortex_shedding.ckpt' 
         solver_config:
             dt: 1.0e-2
       n_skip_on_reset: 5
@@ -55,7 +55,7 @@ drl:
                 actuator_integration: 'implicit'
                 Re: 100
                 mesh: medium
-                restart: '/home/firedrake/sindy-rl/data/hydro/cylinder/2023-12-13_medium/Re=100_dt=1e-3/snapshots/no_control_487500.ckpt'
+                restart: '/home/firedrake/sindy-rl/data/hydrogym/cylinder/med_mesh_init_vortex_shedding.ckpt' 
               solver_config:
                   dt: 1.0e-2
             n_skip_on_reset: 5
@@ -86,7 +86,7 @@ off_policy_buffer:
   init: 
     type: file
     kwargs: 
-      fname: '/home/firedrake/sindy-rl/data/hydro/cylinder/2023-12-13_medium/Re=100_dt=1e-2/control/traj=5_freq=10_dt=1e-2_steps=500_none=100.pkl'
+      fname: '/home/firedrake/sindy-rl/data/hydrogym/cylinder/traj_data-off_pi.pkl'
 
 
 # !!NOTE: This is a dummy config for the baseline
