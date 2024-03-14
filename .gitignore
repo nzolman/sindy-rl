@@ -11,6 +11,8 @@ data/benchmarks/cylinder
 data/benchmarks/swimmer
 data/benchmarks/swingup
 
+data/hydrogym/cylinder
+
 notebooks
 images/
 ray_results/
