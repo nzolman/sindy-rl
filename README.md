@@ -61,7 +61,9 @@ After setting up the `sindy_rl` package, the main entry point to the code is `si
 # Accessing Data/Results
 Due to the size of the benchmarks (20 trials per experiment), only indvidual checkpoints are available with the repository. These can be found under `data/`. 
 
-Because there are significant binary files, these are zipped up in a tarball and managed with `git lfs`. For a user, this only means that you need to untar.gz them. For unix users (linux, macos), this was made easy with our Makefile. You can simply navigate to the root directory of the repo and run 
+Because there are significant binary files, these are zipped up in a tarball and managed with `git lfs`. In order to download the data, you should make sure that you have `git lfs` installed. If you install `git lfs` after cloning, you will need to run `git lfs pull`. 
 
-```make data```
+ To untar.gz them. For unix users (linux, macos), this was made easy with our Makefile. You can simply navigate to the root directory of the repo and run 
+
+```make unzip_data```
 
