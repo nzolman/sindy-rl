@@ -1,6 +1,5 @@
 # SINDy-RL
-This repository houses the code associated with the paper **"SINDy-RL: Interpretable and Efficient Model-Based Reinforcement Learning"** $\textcolor{red}{<\text{insert URL}>}$
-.
+This repository houses the code associated with the paper [**"SINDy-RL: Interpretable and Efficient Model-Based Reinforcement Learning"**](https://arxiv.org/abs/2403.09110).
  While we do provide some amount of documentation, the intent for this repository is for research code illustrating the ideas and results of the paper; it is not expected to be used as a standalone pacakge, nor officially maintained. 
  However, the code is still being updated and cleaned to make it easier to read and use. Please check back for additional updates, and please use Github for any discussions, inquiries, and/or issues.
 
