@@ -58,11 +58,16 @@ The code relies on `rllib==2.6.3` and has not been updated for the new RLlib API
 After setting up the `sindy_rl` package, the main entry point to the code is `sindy_rl/pbt_dyna.py`, which essentially acts as Algorithm 1 in the paper. Simply change the name/location of the configuration file to be the one you'd like to run; this includes functionality for Population-Based Training (PBT) with Ray Tune by using the keyword `use_pbt: True` in the configuration file. For running MB-MPO or standard baselines, you can find scripts under `sindy_rl/scripts`. By default, all experiments use Ray Tune to launch 20 different trials (identical configuration, but different random seeds/initializations).
 
 # Accessing Data/Results
-Due to the size of the benchmarks (20 trials per experiment), only indvidual checkpoints are available with the repository. These can be found under `data/`. 
+Due to the size of the benchmarks (20 trials per experiment), only individual checkpoints are available. All the data/models can be found in the associated [Hugging Face repository](https://huggingface.co/nzolman/sindy-rl_data) (Note: see [issue](https://github.com/nzolman/sindy-rl/issues/2) for more detail on this choice). Because there are significant binary files, these are zipped up in a tarball and managed with `git lfs`. In order to download the data, you should make sure that you have `git lfs` installed. If you install `git lfs` after cloning, you will need to run `git lfs pull`. 
 
-Because there are significant binary files, these are zipped up in a tarball and managed with `git lfs`. In order to download the data, you should make sure that you have `git lfs` installed. If you install `git lfs` after cloning, you will need to run `git lfs pull`. 
+All of this has been made simple using hooks inside our Makefile (at least for Unix users, e.g. Linux or MacOS). To get the data and untar.gz into a folder named `./data`, simply navigate to the root directory of the repo and run: 
 
- To untar.gz them. For unix users (linux, macos), this was made easy with our Makefile. You can simply navigate to the root directory of the repo and run 
+```
+# clone data from Hugging Face
+make grab_data
 
-```make unzip_data```
+# set up all the data by unzipping
+make unzip_data
+```
 
+If you have issues with this (e.g., because folders exist from an older version of the repo), you can run ```make clean_data```. However, note that this will remove ALL the contents of `./data`! This should be done with extreme caution!!

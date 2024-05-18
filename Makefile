@@ -1,3 +1,6 @@
+grab_data:
+	git clone https://huggingface.co/nzolman/sindy-rl_data ./data
+
 unzip_data:
 	tar -xvzf ./data/benchmarks/swingup.tar.gz -C ./data/benchmarks/
 	tar -xvzf ./data/benchmarks/swimmer.tar.gz -C ./data/benchmarks/
@@ -21,3 +24,9 @@ remove_data_folders:
 	rm -rf ./data/agents/cylinder
 
 	rm -rf ./data/hydrogym/cylinder
+
+
+# THIS COULD BE EXTREMELY DANGEROUS! 
+# BE VERY CERTAIN YOU HAVE NOTHING NEW INSIDE THESE FOLDERS WORTH SAVING
+clean_data: 
+	rm -rf ./data/
