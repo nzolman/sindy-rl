@@ -1,9 +1,13 @@
 # --------------------------------------------------------
+# Pinball PPO Baseline
+# even though a "baseline", this intended for use with `pbt_dyna.py` 
+# with use_pbt = False 
+# (it was easier to just run with "env_config: ... use_real_env: True")
 # --------------------------------------------------------
 
-exp_dir: pinball_new
+exp_dir: pinball_baseline
 n_train_iter: 40000
-dyn_fit_freq: 25
+dyn_fit_freq: 1
 fcnet_hiddens: [64, 64]
 use_pbt: False
 
@@ -24,10 +28,11 @@ real_env:
       restart: 
         - /replace/with/path/to/checkpoint.ckpt
 
+
 drl:
   class: PPO
   config:
-    training:
+    training: 
       gamma: 0.99
       lr: 3.0e-4
       lambda_: 0.95
@@ -38,26 +43,26 @@ drl:
     environment:
       env: 
       env_config:
-        init_real_on_start: False
-        reset_from_buffer: True
+        use_real_env: True
+        init_real_on_start: True
+        reset_from_buffer: False
         max_episode_steps: 2000
         real_env_class: HydroSVDWrapper
         real_env_config: 
           flow: 'Pinball'
           dt: 1.0e-2
           n_svd: 10
-          svd_load: /replace/with/path/to/svd
+          svd_load: /replace/with/path/to/svd.pkl
           flow_config:
             mesh: 'medium'
             Re: 100
             'observation_type': velocity_probes
             restart: 
               - /replace/with/path/to/checkpoint.ckpt
-
         ensemble_modes: 
-          dyn: median
-          rew: median
-        init_weights: True
+          dyn: median # !!NOTE: This is a dummy variable for the baseline
+          rew: median # !!NOTE: This is a dummy variable for the baseline
+        init_weights: True # !!NOTE: This is a dummy variable for the baseline
         act_dim: 3
         obs_dim: 10
         act_bounds: 
@@ -80,6 +85,7 @@ drl:
       evaluation_interval: # None
 
 
+# !!NOTE: This is a dummy config for the baseline
 off_policy_buffer:
   config:
     max_traj:
@@ -90,16 +96,16 @@ off_policy_buffer:
       fname: /replace/with/path/to/trajectories.pkl
 
 
-
+# !!NOTE: This is a dummy config for the baseline
 on_policy_buffer:
   config:
     max_traj: 
-    max_samples: 12000
+    max_samples: 35000
   collect:
     n_steps: 1000
     n_steps_reset: 1000
 
-
+# !!NOTE: This is a dummy config for the baseline
 dynamics_model:
   class: EnsembleSINDyDynamicsModel
   config:
@@ -125,6 +131,7 @@ dynamics_model:
         poly_int: True
         tensor: False
 
+# !!NOTE: This is a dummy config for the baseline
 rew_model:
   class: EnsembleSparseRewardModel
   config:
@@ -149,7 +156,7 @@ rew_model:
 
 ray_config:
     run_config:
-        name: dyna_pinball
+        name: baseline_pinball
         stop:
             num_env_steps_sampled: 5.0e+6
         log_to_file: True 
