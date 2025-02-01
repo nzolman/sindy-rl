@@ -214,7 +214,7 @@ def gen_pinball(Re=100):
     traj_kwargs = {
          'ctrl_type': 'random',
          'zero_hold_n': 5,   # 20 Hz
-         'n_steps': 5000,    # 50 seconds
+         'n_steps': 3000,    # 30 seconds
          'n_none':  500,      # 5 seconds
     }
     gen_trajs('Pinball', flow_config, 
