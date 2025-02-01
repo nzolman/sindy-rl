@@ -4,12 +4,55 @@ This repository houses the code associated with the paper [**"SINDy-RL: Interpre
  However, the code is still being updated and cleaned to make it easier to read and use. Please check back for additional updates, and please use Github for any discussions, inquiries, and/or issues.
 
 # Installation
-Note: This repository has only been tested on linux machines (Ubuntu). For issues with Mac/Windows, please leave a Git Issue. While there is no reason to suspect that this code will not work with other versions of Python 3.x, it has only been tested with Python=3.9.13 and Python=3.10.6. As discussed below, if you seek to use Hydrogym with this version of the code, we recommend you use the Docker container below (which uses Python=3.10.6) as opposed to creating your own installation. Future compatibility with the initial Hydrogym release is expected, but not currently supported. 
+This repository has only been tested on linux machines (Ubuntu). For issues with Mac/Windows, please leave a Git Issue. While there is no reason to suspect that this code will not work with other versions of Python 3.x, it has only been tested with Python=3.9.13, Python=3.10.6, and Python==3.10.12. For just using the algorithms with `gymnasium`, `dm_control`, or other easy-installation environments, you should be able to simply clone this repository and install from the requirements file. See "Local Installation" below. However, if you seek to use the fluids examples with Hydrogym, it is recommended you use a Docker container. 
 
-## Docker
-The main repo can be installed below using pip, however, you may find it easier to run the Hydrogym example using a pre-built Docker container. 
-While Hydrogym now offers containers for use, this project forked an earlier version of Hydrogym and the code in this repository is only guaranteed to work with that version. 
-Because of this, you can access a pre-built version that includes the forked Hydrogym at [https://hub.docker.com/r/nfzolman/sindy_rl](https://hub.docker.com/r/nfzolman/sindy_rl). 
+**NOTE**: Between the original version on arXiv and February 2025, Hydrogym went through a major refactor. To use with the refactored version, we recommend you use the devcontainer (e.g. with VS Code). 
+The original arXiv version of the paper uses the Docker container instructions below. To use the new Hydrogym repository (or the fork at https://github.com/nzolman/hydrogym/), follow the devcontainer instructions below.
+
+**NOTE**: `ray` has undergone several changes since the original onset of this project. This has only been tested with `ray==2.6.3` with `ray.rllib` and `ray.tune`. There is no expectation this code will be updated to accommodate later versions of ray. 
+
+## Local Install: `pip`
+For local installations, you can simply run 
+
+```
+$ git clone https://github.com/nzolman/sindy-rl.git
+$ cd sindy_rl
+$ pip install -r requirements.txt
+$ pip install -e .
+```
+
+## Devcontainer: newer Hydrogym versions.
+Devcontainers are a convenient way to use docker containers that mount local file systems for persistent code changes. VSCode has a [great tutorial](https://code.visualstudio.com/docs/devcontainers/tutorial) on getting started with using devcontainers with their application. The devcontainer file is under `.devcontainer/.devcontainer.json`. 
+
+First, clone this repository: 
+
+```
+$ git clone https://github.com/nzolman/sindy-rl.git
+$ cd sindy_rl
+```
+
+You will need a compatible version of Hydrogym then need to clone Hydrogym. For convenience, I have a fork with the pinball environment here:  https://github.com/nzolman/hydrogym/. Simply run
+
+```
+$ git clone https://github.com/nzolman/hydrogym/
+```
+
+NOTE: At some point, Hydrogym started to use `git lfs` for downloading the meshes; for ease of installation, you may want to install `git lfs` first. Though, in principle, this can also be done after the devcontainer has been built. 
+
+Now you can build the devcontainer, which will pull an image of hydrogym and install the requirements into the container. Follow the [tutorial](https://code.visualstudio.com/docs/devcontainers/tutorial) for how to do this. If you run into issues, you might need to manually install some python packages---[see this Hydrogym issue](https://github.com/dynamicslab/hydrogym/issues/198).
+
+
+Once you're inside the container and you've installed any packages, you'll want to navigate to the root directory of the `sindy-rl/` repository and install it. Simply run the following as in the local install.
+
+```
+$ cd sindy_rl
+$ pip install -r requirements.txt
+$ pip install -e .
+```
+
+
+## Docker: Original arXiv version
+The Cylinder example from the paper used a previous version of Hydrogym forked from a much earlier version of the code. Because of this, you can access a pre-built version that includes the forked Hydrogym at [https://hub.docker.com/r/nfzolman/sindy_rl](https://hub.docker.com/r/nfzolman/sindy_rl). 
 
 If you don't have familiarity with Docker, a great staring guide can be found [here](https://www.datacamp.com/tutorial/docker-for-data-science-introduction). After installing Docker, the shortest path to running the code in this project is to pull the docker image by running:
 
@@ -38,16 +81,6 @@ jupyter-lab --no-browser --allow-root --ip 0.0.0.0
 
 which will map to the host at `localhost:8888`.
 
-
-## Local Install: `pip`
-For local installations, you can simply run 
-
-```
-$ git clone https://github.com/nzolman/sindy-rl.git
-$ cd sindy_rl
-$ pip install -r requirements.txt
-$ pip install -e .
-```
 
 # Documentation
 There is no official built documentation; however, you may find the quick start tutorials useful under `tutorials`. There are planned tutorials for more aspects of the code after the initial release. For a particular tutorial request, please use Github discussions.  
