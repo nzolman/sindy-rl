@@ -90,6 +90,8 @@ The code relies on `rllib==2.6.3` and has not been updated for the new RLlib API
 
 After setting up the `sindy_rl` package, the main entry point to the code is `sindy_rl/pbt_dyna.py`, which essentially acts as Algorithm 1 in the paper. Simply change the name/location of the configuration file to be the one you'd like to run; this includes functionality for Population-Based Training (PBT) with Ray Tune by using the keyword `use_pbt: True` in the configuration file. For running MB-MPO or standard baselines, you can find scripts under `sindy_rl/scripts`. By default, all experiments use Ray Tune to launch 20 different trials (identical configuration, but different random seeds/initializations).
 
+When running these scripts, it can take several hours (or even days) to run. However, the ray logger should start producing result outputs after a few minutes. When launched on a computer with fewer CPUs than number of trials, the trials will run serially until completed. 
+
 # Accessing Data/Results
 Due to the size of the benchmarks (20 trials per experiment), only individual checkpoints are available. All the data/models can be found in the associated [Hugging Face repository](https://huggingface.co/nzolman/sindy-rl_data) (Note: see [issue](https://github.com/nzolman/sindy-rl/issues/2) for more detail on this choice). Because there are significant binary files, these are zipped up in a tarball and managed with `git lfs`. In order to download the data, you should make sure that you have `git lfs` installed. If you install `git lfs` after cloning, you will need to run `git lfs pull`. 
 
