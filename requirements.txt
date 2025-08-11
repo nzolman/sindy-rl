@@ -1,7 +1,8 @@
 ray[rllib,tune]==2.6.3
 mujoco
 gym==0.26.2
-torch==1.13.0
+torch
+# torch==1.13.0 # Original code used torch==1.13.0, but there are package vulnerabilities
 tensorboard
 numpy
 pandas
