@@ -32,6 +32,7 @@ $ pip install -e .
 ```
 
 ### Devcontainer: newer Hydrogym versions
+<details>
 Devcontainers are a convenient way to use docker containers that mount local file systems for persistent code changes. VSCode has a [great tutorial](https://code.visualstudio.com/docs/devcontainers/tutorial) on getting started with using devcontainers with their application. The devcontainer file is under `.devcontainer/.devcontainer.json`. 
 
 First, clone this repository: 
@@ -60,8 +61,10 @@ $ pip install -r requirements.txt
 $ pip install -e .
 ```
 
+</details>
 
 ### Docker: Original arXiv version
+<details>
 The Cylinder example from the paper used a previous version of Hydrogym forked from a much earlier version of the code. Because of this, you can access a pre-built version that includes the forked Hydrogym at [https://hub.docker.com/r/nfzolman/sindy_rl](https://hub.docker.com/r/nfzolman/sindy_rl). 
 
 If you don't have familiarity with Docker, a great staring guide can be found [here](https://www.datacamp.com/tutorial/docker-for-data-science-introduction). After installing Docker, the shortest path to running the code in this project is to pull the docker image by running:
@@ -90,7 +93,7 @@ jupyter-lab --no-browser --allow-root --ip 0.0.0.0
 ```
 
 which will map to the host at `localhost:8888`.
-
+</details>
 
 # Documentation
 There is no official built documentation; however, you may find the quick start tutorials useful under `tutorials`. There are planned tutorials for more aspects of the code after the initial release. For a particular tutorial request, please use Github discussions.  
