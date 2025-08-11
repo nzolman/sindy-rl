@@ -1,17 +1,31 @@
 # SINDy-RL
+
 This repository houses the code associated with the paper [**"SINDy-RL: Interpretable and Efficient Model-Based Reinforcement Learning"**](https://arxiv.org/abs/2403.09110). A video abstract of the work [can be found here](https://youtu.be/7Q8oNNsZGcA).
  While we do provide some amount of documentation, the intent for this repository is for research code illustrating the ideas and results of the paper; it is not expected to be used as a standalone pacakge, nor officially maintained. 
  However, the code is still being updated and cleaned to make it easier to read and use. Please check back for additional updates, and please use Github for any discussions, inquiries, and/or issues.
 
-# Installation
+ # Getting Started
+
+ ## Simulation Environments
+ Before proceeding, it's important to note that each environment framework from the paper requires different dependencies. While the $\verb|dm_control swing-up|$ and $\verb|gymnasium Swimmer-v4|$ simulation environments require relatively few dependencies, the Cylinder, Pinball, and Airfoil 3D fluid dynamic environments each require special care to replicate the results in the paper---especially because the original versions of the simulations have since changed.
+
+ **Cylinder**: For the latest Hydrogym Cylinder environment, please refer to the [Hydrogym repository](https://github.com/dynamicslab/hydrogym). For the results from this paper, we suggest you checkout the [arXiv release from our repo](https://github.com/nzolman/sindy-rl/tree/arXiv). We built a Docker container that can be used with our repo; see the [installation instructions below](docker-original-arxiv-version) for more instructions.
+
+ **Pinball:** For the latest Hydrogym Pinball environment, please refer to the [Hydrogym repository](https://github.com/dynamicslab/hydrogym). To replicate our results, we forked a working commit from Hydrogym after Firedrake went through a major update. You can find that fork [here](https://github.com/nzolman/hydrogym/) and follow the installation instructions below
+
+ **3D Airfoil:** The 3D Airfoil HydroGym-GPU environment uses the multiphysics-Aerodyamishes Institut Aachen (m-AIA) solver and is not yet publicly accessible (as of August 2025). 
+ However, you can find all our code for training the environment at our companion [SINDy-RL_3DAirfoil](https://github.com/nzolman/SINDy-RL_3DAirfoil) repo. This also includes a custom PPO implementation in PyTorch that does not require RLib and is compatible with simulation environments that conform to the `gymnasium` environment API. Once the API is available, you can find instructions for how to use it.
+ 
+
+## Installation
 This repository has only been tested on linux machines (Ubuntu). For issues with Mac/Windows, please leave a Git Issue. While there is no reason to suspect that this code will not work with other versions of Python 3.x, it has only been tested with Python=3.9.13, Python=3.10.6, and Python==3.10.12. For just using the algorithms with `gymnasium`, `dm_control`, or other easy-installation environments, you should be able to simply clone this repository and install from the requirements file. See "Local Installation" below. However, if you seek to use the fluids examples with Hydrogym, it is recommended you use a Docker container. 
 
 **NOTE**: Between the original version on arXiv and February 2025, Hydrogym went through a major refactor. To use with the refactored version, we recommend you use the devcontainer (e.g. with VS Code). 
-The original arXiv version of the paper uses the Docker container instructions below. To use the new Hydrogym repository (or the fork at https://github.com/nzolman/hydrogym/), follow the devcontainer instructions below.
+The original arXiv version of the paper uses the Docker container instructions below. To use the new Hydrogym repository (or the fork at https://github.com/nzolman/hydrogym/), follow the (devcontainer instructions below)[devcontainer-newer-hydrogym-versions].
 
 **NOTE**: `ray` has undergone several changes since the original onset of this project. This has only been tested with `ray==2.6.3` with `ray.rllib` and `ray.tune`. There is no expectation this code will be updated to accommodate later versions of ray. 
 
-## Local Install: `pip`
+### Local Install: `pip`
 For local installations, you can simply run 
 
 ```
@@ -21,7 +35,7 @@ $ pip install -r requirements.txt
 $ pip install -e .
 ```
 
-## Devcontainer: newer Hydrogym versions.
+### Devcontainer: newer Hydrogym versions.
 Devcontainers are a convenient way to use docker containers that mount local file systems for persistent code changes. VSCode has a [great tutorial](https://code.visualstudio.com/docs/devcontainers/tutorial) on getting started with using devcontainers with their application. The devcontainer file is under `.devcontainer/.devcontainer.json`. 
 
 First, clone this repository: 
@@ -51,7 +65,7 @@ $ pip install -e .
 ```
 
 
-## Docker: Original arXiv version
+### Docker: Original arXiv version
 The Cylinder example from the paper used a previous version of Hydrogym forked from a much earlier version of the code. Because of this, you can access a pre-built version that includes the forked Hydrogym at [https://hub.docker.com/r/nfzolman/sindy_rl](https://hub.docker.com/r/nfzolman/sindy_rl). 
 
 If you don't have familiarity with Docker, a great staring guide can be found [here](https://www.datacamp.com/tutorial/docker-for-data-science-introduction). After installing Docker, the shortest path to running the code in this project is to pull the docker image by running:
@@ -72,7 +86,7 @@ docker run  -u 0 \
 
 This will mount your local version of `sindy_rl` into the container so you can use its environment. After mounting and the container is running, you'll need to navigate to `/home/firedrake/sindy_rl` and run `pip install -e .`. This will add `sindy_rl` as a package to the docker container's python environment.
 
-### Jupyterlab
+#### Jupyterlab
 The container exposes port 8888 and `jupyterlab` is available inside the container. You can host a jupyter instance using 
 
 ```
