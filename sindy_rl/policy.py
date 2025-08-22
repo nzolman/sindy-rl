@@ -38,7 +38,7 @@ class RandomPolicy(BasePolicy):
     '''
     A random policy
     '''
-    def __init__(self,action_space = None, low=None, high=None, seed=0):
+    def __init__(self,action_space = None, low=None, high=None, zero_hold_n=1, seed=0):
         '''
         Inputs: 
             action_space: (gym.spaces) space used for sampling
@@ -50,6 +50,10 @@ class RandomPolicy(BasePolicy):
             self.action_space = Box(low=low, high=high) #action_space
         self.action_space.seed(seed)
         self.magnitude = 1.0
+        self.n_steps_hold = 0
+        self.n_skip = zero_hold_n
+        
+        self.action = self.magnitude * self.action_space.sample()
         
     def compute_action(self, obs):
         '''
@@ -60,7 +64,13 @@ class RandomPolicy(BasePolicy):
         Returns: 
             Random action
         '''
-        return self.magnitude * self.action_space.sample()
+        
+        if (self.n_steps_hold % self.n_skip ) ==0 :
+            self.action = self.magnitude * self.action_space.sample()
+            self.n_steps_hold = 1
+        else:
+            self.n_steps_hold += 1
+        return self.action
     
     def set_magnitude_(self, mag):
         self.magnitude = mag
@@ -209,7 +219,7 @@ class OpenLoopSinusoidPolicy(BasePolicy):
         self.t += self.dt
         
         u = self.amp * np.sin(self.freq * self.t -self.phase) + self.offset
-        return np.array([u])
+        return u
     
 
 class OpenLoopSinRest(OpenLoopSinusoidPolicy):

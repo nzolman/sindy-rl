@@ -5,12 +5,15 @@ unzip_data:
 	tar -xvzf ./data/benchmarks/swingup.tar.gz -C ./data/benchmarks/
 	tar -xvzf ./data/benchmarks/swimmer.tar.gz -C ./data/benchmarks/
 	tar -xvzf ./data/benchmarks/cylinder.tar.gz -C ./data/benchmarks/
+	tar -xvzf ./data/benchmarks/pinball.tar.gz -C ./data/benchmarks/
 
 	tar -xvzf ./data/agents/swingup.tar.gz -C ./data/agents/
 	tar -xvzf ./data/agents/swimmer.tar.gz -C ./data/agents/
 	tar -xvzf ./data/agents/cylinder.tar.gz -C ./data/agents/
+	tar -xvzf ./data/agents/pinball.tar.gz -C ./data/agents/
 
 	tar -xvzf ./data/hydrogym/cylinder.tar.gz -C ./data/hydrogym/
+	tar -xvzf ./data/hydrogym/pinball.tar.gz -C ./data/hydrogym/
 
 # THIS COULD BE EXTREMELY DANGEROUS! 
 # BE VERY CERTAIN YOU HAVE NOTHING NEW INSIDE THESE FOLDERS WORTH SAVING

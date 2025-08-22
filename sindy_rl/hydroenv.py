@@ -5,7 +5,7 @@ from hydrogym.core import PDEBase
 import firedrake as fd
 import matplotlib.pyplot as plt
 
-
+## NOTE: DEPRECATED AFTER HYDROGYM UPDATE 12/2024
 class HydroEnvWrapper(hgym.FlowEnv):
     '''
     Wrapper for HydroEnv class to allow for filtering observations
@@ -136,7 +136,7 @@ class HydroEnvWrapper(hgym.FlowEnv):
         
         return np.array(self.state)
 
-
+## NOTE: DEPRECATED AFTER HYDROGYM UPDATE 12/2024
 class CylinderLiftEnv(HydroEnvWrapper):
     '''
     A wrapper for the Hydrogym Cylinder env that just provides 
@@ -204,6 +204,7 @@ class CylinderLiftEnv(HydroEnvWrapper):
         self.state = self.build_augmented_obs()
         return self.state
 
+## NOTE: DEPRECATED AFTER HYDROGYM UPDATE 12/2024
 class CylinderWrapper(CylinderLiftEnv):
     '''Additional wrapper needed since hydrogym not compliant with latest gymnasium'''
     def __init__(self, env_config=None):
