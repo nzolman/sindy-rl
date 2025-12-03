@@ -119,3 +119,18 @@ make unzip_data
 ```
 
 If you have issues with this (e.g., because folders exist from an older version of the repo), you can run ```make clean_data```. However, note that this will remove ALL the contents of `./data`! This should be done with extreme caution!!
+
+# Citation
+To cite this work, please use the following:
+```
+@article{zolman2025sindy,
+  title={SINDy-RL for interpretable and efficient model-based reinforcement learning},
+  author={Zolman, Nicholas and Lagemann, Christian and Fasel, Urban and Kutz, J Nathan and Brunton, Steven L},
+  journal={Nature Communications},
+  volume={16},
+  number={1},
+  pages={10714},
+  year={2025},
+  publisher={Nature Publishing Group UK London}
+}
+```
